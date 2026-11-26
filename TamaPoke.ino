@@ -3188,14 +3188,16 @@ void drawBattleButtonLabel(int x, int y, int w, const char *label) {
 }
 
 const char *battleTypeName(uint8_t type) {
-  static const char *const TYPE_NAMES[LANG_COUNT][19] = {
+  static const char *const TYPE_NAMES[][19] = {
     { "", "NORMAL", "FUEGO", "AGUA", "ELEC", "PLANTA", "HIELO", "LUCHA", "VENENO", "TIERRA", "VUELO", "PSI", "BICHO", "ROCA", "FANT", "DRAGON", "SINIE", "ACERO", "HADA" },
     { "", "NORMAL", "FIRE", "WATER", "ELEC", "GRASS", "ICE", "FIGHT", "POISON", "GROUND", "FLY", "PSY", "BUG", "ROCK", "GHOST", "DRAGON", "DARK", "STEEL", "FAIRY" },
     { "", "NORMAL", "FEU", "EAU", "ELEC", "PLANTE", "GLACE", "COMBAT", "POISON", "SOL", "VOL", "PSY", "INSECT", "ROCHE", "SPECTRE", "DRAGON", "TENEBR", "ACIER", "FEE" },
     { "", "NORMAL", "FEUER", "WASSER", "ELEKTRO", "PFLANZE", "EIS", "KAMPF", "GIFT", "BODEN", "FLUG", "PSYCHO", "KAEFER", "GESTEIN", "GEIST", "DRACHE", "UNLICHT", "STAHL", "FEE" },
     { "", "NORMALE", "FUOCO", "ACQUA", "ELETTRO", "ERBA", "GHIACCIO", "LOTTA", "VELENO", "TERRA", "VOLANTE", "PSICO", "COLEOT", "ROCCIA", "SPETTRO", "DRAGO", "BUIO", "ACCIAIO", "FOLLETTO" },
     { "", "NORMAL", "FOGO", "AGUA", "ELETR", "PLANTA", "GELO", "LUTA", "VENENO", "TERRA", "VOO", "PSI", "INSETO", "PEDRA", "FANT", "DRAGAO", "SOMBRIO", "ACO", "FADA" },
+    { "", "NORMALNY", "OGIEN", "WODA", "ELEKTR", "TRAWA", "LOD", "WALKA", "TRUJACY", "ZIEMIA", "LATAJACY", "PSYCH", "ROBAK", "SKALA", "DUCH", "SMOK", "MROK", "STAL", "BAJKOWY" },
   };
+  static_assert(sizeof(TYPE_NAMES) / sizeof(TYPE_NAMES[0]) == LANG_COUNT, "TYPE_NAMES: one row per language");
   if (type < 19) return TYPE_NAMES[gLang][type];
   switch (type) {
     case TYPE_NORMAL: return "NORMAL";
@@ -3535,7 +3537,7 @@ void drawClockBtn(int x, int y, const char *l) {
 // pildoras de idioma centradas en y; rellena la activa
 #define LANG_PILL_Y 296
 #define LANG_PILL_H 30
-#define LANG_PILL_X 336          // pildora de idioma (cicla los 6 al tocar)
+#define LANG_PILL_X 336          // pildora de idioma (cicla los idiomas al tocar)
 #define LANG_PILL_W 96
 #define SOUND_PILL_X 24
 #define SOUND_PILL_W 116
@@ -3559,7 +3561,8 @@ uint8_t nextSoundMode() {
     default: return SOUND_FULL;
   }
 }
-static const char *const LANG_CODES[LANG_COUNT] = { "ES", "EN", "FR", "DE", "IT", "PT" };
+static const char *const LANG_CODES[] = { "ES", "EN", "FR", "DE", "IT", "PT", "PL" };
+static_assert(sizeof(LANG_CODES) / sizeof(LANG_CODES[0]) == LANG_COUNT, "LANG_CODES: one row per language");
 
 const char *powerSaveLabel() {
   return powerSave ? T(S_PSAVE_ON) : T(S_PSAVE_OFF);
@@ -3575,19 +3578,23 @@ void drawStatusLine(int y, const char *label, const char *value, uint16_t valueC
   gfx->print(value);
 }
 
-static const char *const HELP_WORD[LANG_COUNT] = { "AYUDA", "HELP", "AIDE", "HILFE", "AIUTO", "AJUDA" };
-static const char *const HELP_OK[LANG_COUNT] = { "OK", "OK", "OK", "OK", "OK", "OK" };
+static const char *const HELP_WORD[] = { "AYUDA", "HELP", "AIDE", "HILFE", "AIUTO", "AJUDA", "POMOC" };
+static_assert(sizeof(HELP_WORD) / sizeof(HELP_WORD[0]) == LANG_COUNT, "HELP_WORD: one row per language");
+static const char *const HELP_OK[] = { "OK", "OK", "OK", "OK", "OK", "OK", "OK" };
+static_assert(sizeof(HELP_OK) / sizeof(HELP_OK[0]) == LANG_COUNT, "HELP_OK: one row per language");
 
-static const char *const HELP_TITLES[LANG_COUNT][HELP_PAGE_COUNT] = {
+static const char *const HELP_TITLES[][HELP_PAGE_COUNT] = {
   { "CUIDADO", "SUENO/ENERGIA", "MINIJUEGOS", "COMBATE 1", "COMBATE 2", "COLECCION", "EXTRAS", "EXPEDICION" },
   { "CARE", "SLEEP/ENERGY", "MINIGAMES", "BATTLE 1", "BATTLE 2", "COLLECTION", "EXTRAS", "EXPEDITION" },
   { "SOIN", "SOMMEIL/ENE", "MINI-JEUX", "COMBAT 1", "COMBAT 2", "COLLECTION", "EXTRAS", "EXPEDITION" },
   { "PFLEGE", "SCHLAF/ENERGIE", "MINISPIELE", "KAMPF 1", "KAMPF 2", "SAMMLUNG", "EXTRAS", "EXPEDITION" },
   { "CURA", "SONNO/ENERGIA", "MINIGIOCHI", "LOTTA 1", "LOTTA 2", "COLLEZIONE", "EXTRA", "SPEDIZIONE" },
   { "CUIDADO", "SONO/ENERGIA", "MINIJOGOS", "BATALHA 1", "BATALHA 2", "COLECAO", "EXTRAS", "EXPEDICAO" },
+  { "OPIEKA", "SEN/ENERGIA", "MINIGRY", "WALKA 1", "WALKA 2", "KOLEKCJA", "EXTRA", "WYPRAWA" },
 };
+static_assert(sizeof(HELP_TITLES) / sizeof(HELP_TITLES[0]) == LANG_COUNT, "HELP_TITLES: one row per language");
 
-static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT] = {
+static const char *const HELP_LINES[][HELP_PAGE_COUNT][HELP_LINE_COUNT] = {
   {
     { "Comida baja = descuido.", "Jugar sube alegria.", "Bano limpia suciedad.", "Tocar da alegria/vinc.", "Peso alto te frena.", "Dulce alegra, engorda." },
     { "Dormir recupera energia.", "Durmiendo todo baja lento.", "Luz despierta o duerme.", "PWR corto apaga pantalla.", "Ahorro usa light sleep.", "Sin borrar conserva save." },
@@ -3648,7 +3655,18 @@ static const char *const HELP_LINES[LANG_COUNT][HELP_PAGE_COUNT][HELP_LINE_COUNT
     { "Diario da metas.", "Eventos sao raros.", "Batalha selvagem opc.", "Captura apos vitoria.", "Series/medalhas ficam.", "Agita: joga. Andar da ALE." },
     { "Expedicao: 15/30/60 min.", "Energia gasta ao sair.", "Pet fica disponivel.", "Cuidado/laco melhora premio.", "Recolhe 1 item ao voltar.", "Chip abre este cartao." },
   },
+  {
+    { "Glod = wpadka.", "Zabawa dodaje radosc.", "Kapiel czysci brud.", "Glaskanie: radosc/wiez.", "Duza waga zwalnia.", "Cukierek cieszy, tuczy." },
+    { "Sen daje energie.", "Przez sen wolniej spada.", "Swiatlo: spij/wstan.", "Krotki PWR gasi ekran.", "Oszcz. uzywa light sleep.", "Bez erase save zostaje." },
+    { "Pilka: dotknij pilki.", "Zlap: dotykaj ikony.", "Memo: powtorz sekwencje.", "Czysc: dotykaj plam.", "Typ: wybierz przewage.", "Daja rekordy i trening." },
+    { "Szybki: mniej obrazen.", "Wrog rzadziej unika.", "Dostajesz mniej obrazen.", "Mocny: wiecej obrazen.", "Wieksze ryzyko.", "Nie zawsze najlepszy." },
+    { "Unik chroni przed ciosem.", "Udany: Kontra gotowa.", "Nast. atak mocniejszy.", "Odpoczynek leczy 2 razy.", "Odpoczynek daje Gard.", "Typy zmieniaja obrazenia." },
+    { "Pokedex: przesun w bok.", "Wychowane/zlapane licza sie.", "10/25/50/100/151/160/200/251/300/386: ramki.", "Profil: wybierz ramke.", "Znany opis: odglos.", "DZW MAX: dotknij stworka." },
+    { "DZIENNE: male cele.", "Wydarzenia sa rzadkie.", "Dzikie walki opcjonalne.", "Lap po wygranej.", "Serie/medale zostaja.", "Potrzasnij: gra. Marsz=RADO." },
+    { "Wyprawa: 15/30/60 min.", "Energia schodzi na starcie.", "Stworek jest dostepny.", "Opieka/wiez poprawia lup.", "Odbierz 1 przedmiot.", "Chip otwiera te karte." },
+  },
 };
+static_assert(sizeof(HELP_LINES) / sizeof(HELP_LINES[0]) == LANG_COUNT, "HELP_LINES: one row per language");
 
 void renderHelp() {
   helpDirty = false;
@@ -3785,7 +3803,7 @@ void renderClock() {
   gfx->setCursor(PSAVE_PILL_X + (PSAVE_PILL_W - (int)strlen(pl) * 12) / 2, LANG_PILL_Y + 8);
   gfx->print(pl);
 
-  // selector de idioma: una pildora que cicla los 6 idiomas al tocar
+  // selector de idioma: una pildora que cicla los idiomas al tocar
   gfx->fillRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_WHITE);
   gfx->drawRoundRect(LANG_PILL_X, LANG_PILL_Y, LANG_PILL_W, LANG_PILL_H, 8, UI_INK);
   char lp[10];

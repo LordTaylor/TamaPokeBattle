@@ -5,7 +5,7 @@
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
 ![Firmware](https://img.shields.io/badge/firmware-v1.36.2-4F93C4)
 ![Pokédex](https://img.shields.io/badge/Pok%C3%A9mon-386-E8503A)
-![Languages](https://img.shields.io/badge/languages-6-FFCB05)
+![Languages](https://img.shields.io/badge/languages-7-FFCB05)
 
 TamaPoke is a Pokémon-inspired virtual pet for the
 **Waveshare ESP32-S3-Touch-AMOLED-1.75**. This is ShadowEnemyx's expanded fork.
@@ -42,7 +42,7 @@ hardware diagnostics.
 
 - 386 Pokémon from Kanto, Johto and Hoenn, including Shiny variants
 - region and starter selection on a new Gen‑3 save
-- six UI languages: English, German, Spanish, French, Italian and Portuguese
+- seven UI languages: English, German, Spanish, French, Italian, Portuguese and Polish
 - evolution with branching, day/night, bond and stat conditions
 - evolution care gate: strictly three of four needs above 40
 - persistent Pokédex/Box with raised and caught markers
