@@ -48,13 +48,6 @@ static void testMultiLevelUpKeepsRemainder() {
   EXPECT_EQ(award.levelsGained, 1);
   EXPECT_EQ(s.level, 2);
   EXPECT_EQ(s.progress, 4);
-
-  TrainerStats big;
-  big.progress = 34;  // poza zakresem sanity, ale petla ma obsluzyc kilka awansow
-  award = trainerApplyResult(big, PVP_WIN, 9, true);  // 39 -12 -12 -13 = 2
-  EXPECT_EQ(award.levelsGained, 3);
-  EXPECT_EQ(big.level, 4);
-  EXPECT_EQ(big.progress, 2);
 }
 
 static void testMultiLevelUpLoop() {
@@ -82,6 +75,7 @@ static void testAbortChangesNothing() {
   s.progress = 5;
   TrainerAward award = trainerApplyResult(s, PVP_ABORTED, 30, true);
   EXPECT_TRUE(!award.applied);
+  EXPECT_TRUE(!award.blocked);
   EXPECT_EQ(s.level, 7);
   EXPECT_EQ(s.progress, 5);
   EXPECT_EQ(s.matchSeq, 0u);
@@ -92,6 +86,7 @@ static void testBlockedPointsStillCountMatch() {
   TrainerStats s;
   TrainerAward award = trainerApplyResult(s, PVP_WIN, 9, false);
   EXPECT_TRUE(!award.applied);
+  EXPECT_TRUE(award.blocked);  // zablokowane przez guard, nie ABORTED
   EXPECT_EQ(s.wins, 1);
   EXPECT_EQ(s.matchSeq, 1u);
   EXPECT_EQ(s.progress, 0);
@@ -154,13 +149,24 @@ static void testFarmGuard() {
   EXPECT_TRUE(farmGuardAllows(g, 1, 1000 + FARM_COOLDOWN_SEC));
   EXPECT_TRUE(farmGuardAllows(g, 2, 1001));  // inny przeciwnik
 
-  // cofniety zegar: dozwolone
-  EXPECT_TRUE(farmGuardAllows(g, 1, 500));
-  farmGuardRecord(g, 1, 500);  // nadpisuje wpis, nie dubluje
+  // cofniety zegar: blokada, a resync restartuje cooldown od nowego czasu
+  EXPECT_TRUE(!farmGuardAllows(g, 1, 500));
+  farmGuardResync(g, 1, 500);
   EXPECT_TRUE(!farmGuardAllows(g, 1, 501));
+  EXPECT_TRUE(farmGuardAllows(g, 1, 500 + FARM_COOLDOWN_SEC));
   int count = 0;
   for (const FarmEntry &e : g.entries) count += e.epoch != 0;
   EXPECT_EQ(count, 1);
+}
+
+static void testFarmGuardBlocksWithoutValidClock() {
+  FarmGuard g;
+  EXPECT_TRUE(!farmGuardAllows(g, 1, 0));  // RTC niewazny: brak punktow
+  farmGuardRecord(g, 1, 0);                // nie tworzy wpisu
+  EXPECT_TRUE(farmGuardAllows(g, 1, 100));
+  farmGuardRecord(g, 1, 100);
+  farmGuardResync(g, 1, 0);                // zero nie kasuje wpisu
+  EXPECT_TRUE(!farmGuardAllows(g, 1, 101));
 }
 
 static void testFarmGuardEvictsOldest() {
@@ -210,6 +216,7 @@ int main() {
   testMaxLevelHasNoProgress();
   testSanitizeStats();
   testFarmGuard();
+  testFarmGuardBlocksWithoutValidClock();
   testFarmGuardEvictsOldest();
   testHistoryRing();
   testSanitizeHistoryDropsGarbage();

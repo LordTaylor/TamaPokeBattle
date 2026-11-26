@@ -488,14 +488,19 @@ void Pet::checkMedals() {
 }
 
 // Zostawia tylko znaki dostepne na klawiaturze (A-Z . -) i tnie do TRAINER_NAME_MAX.
-static void sanitizeTrainer(const char *in, char *out) {
+// Czyta najwyzej inLen bajtow (i konczy na NUL), wiec bufor z sieci nie musi miec terminatora.
+static void sanitizeTrainerN(const char *in, size_t inLen, char *out) {
   size_t n = 0;
-  for (; in && *in && n < TRAINER_NAME_MAX; in++) {
-    char ch = *in;
+  for (size_t i = 0; in && i < inLen && in[i] && n < TRAINER_NAME_MAX; i++) {
+    char ch = in[i];
     if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 'a' + 'A');
     if ((ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-') out[n++] = ch;
   }
   out[n] = 0;
+}
+
+static void sanitizeTrainer(const char *in, char *out) {
+  sanitizeTrainerN(in, (size_t)-1, out);
 }
 
 bool trainerNameHasLetter(const char *name) {
@@ -506,10 +511,19 @@ bool trainerNameHasLetter(const char *name) {
 
 static_assert(TRAINER_NAME_MAX == PVP_NICK_MAX, "nick trenera i nick w historii PvP musza miec ten sam limit");
 
-TrainerAward Pet::recordPvpMatch(PvpResult result, const char *oppNick, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch) {
+static void nickOrUnknown(char *nick) {
+  if (!trainerNameHasLetter(nick)) strcpy(nick, PVP_NICK_UNKNOWN);
+}
+
+// oppDeviceId ma pochodzic z MAC nadawcy (callback ESP-NOW), nie z payloadu.
+TrainerAward Pet::recordPvpMatch(PvpResult result, const char *oppNick, size_t oppNickLen, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch) {
   if (result == PVP_ABORTED) return TrainerAward();
+  if (oppLevel < TRAINER_LEVEL_MIN) oppLevel = TRAINER_LEVEL_MIN;
+  if (oppLevel > TRAINER_LEVEL_MAX) oppLevel = TRAINER_LEVEL_MAX;
   char nickClean[TRAINER_NAME_MAX + 1];
-  sanitizeTrainer(oppNick, nickClean);
+  sanitizeTrainerN(oppNick, oppNickLen, nickClean);
+  nickOrUnknown(nickClean);
+  farmGuardResync(farmGuard, oppDeviceId, nowEpoch);
   bool allowed = farmGuardAllows(farmGuard, oppDeviceId, nowEpoch);
   TrainerAward award = trainerApplyResult(trainerStats, result, oppLevel, allowed);
   pvpHistoryPush(pvpHistory, nickClean, result, oppLevel, trainerStats.matchSeq);
@@ -1677,6 +1691,7 @@ void Pet::save() {
   prefs.putUShort("tlos", trainerStats.losses);
   prefs.putUShort("tdrw", trainerStats.draws);
   prefs.putUInt("tseq", trainerStats.matchSeq);
+  // Bloby to zrzut struktur bez wersji: zmiana layoutu FarmGuard/PvpHistoryEntry = nowy klucz NVS.
   prefs.putBytes("tfarm", &farmGuard, sizeof(farmGuard));
   prefs.putBytes("thist", pvpHistory, sizeof(pvpHistory));
 }
@@ -1692,6 +1707,13 @@ void Pet::loadTrainerStats() {
   loadDexBitmap(prefs, "tfarm", reinterpret_cast<uint8_t *>(&farmGuard), sizeof(farmGuard));
   loadDexBitmap(prefs, "thist", reinterpret_cast<uint8_t *>(pvpHistory), sizeof(pvpHistory));
   sanitizePvpHistory(pvpHistory);
+  for (PvpHistoryEntry &e : pvpHistory) {
+    if (e.seq == 0) continue;
+    char clean[TRAINER_NAME_MAX + 1] = {};
+    sanitizeTrainerN(e.nick, sizeof(e.nick), clean);
+    nickOrUnknown(clean);
+    memcpy(e.nick, clean, sizeof(e.nick));
+  }
 }
 
 void Pet::load() {

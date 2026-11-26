@@ -342,7 +342,7 @@ public:
   void rename(const char *name);
   void setTrainer(const char *name);
   bool hasTrainer() const { return trainer[0] != 0; }
-  TrainerAward recordPvpMatch(PvpResult result, const char *oppNick, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch);
+  TrainerAward recordPvpMatch(PvpResult result, const char *oppNick, size_t oppNickLen, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch);
   bool hasMedal(uint16_t m) const { return medals & m; }
   bool showMedal() const { return deadlineActive(millis(), medalUntil); }
   bool showMilestone() const { return deadlineActive(millis(), milestoneUntil); }
@@ -361,6 +361,7 @@ public:
   bool importBackup(const uint8_t *data, size_t length);
 
 private:
+  friend struct PetTestAccess;  // tylko tests/pet_tests.cpp
   Preferences prefs;
   uint32_t lastTick = 0;
   uint32_t eatUntil = 0;

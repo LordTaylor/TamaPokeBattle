@@ -21,7 +21,7 @@ build:
 build/pet_tests: $(PET_TEST_OBJS)
 	$(CXX) $(CXXFLAGS) $(PET_TEST_OBJS) -o $@
 
-build/pet_tests.o: pet_tests.cpp ../pet.h ../dex.h | build
+build/pet_tests.o: pet_tests.cpp ../pet.h ../trainer.h ../dex.h | build
 	$(CXX) $(CXXFLAGS) -c pet_tests.cpp -o $@
 
 build/pet.o: ../pet.cpp ../pet.h ../trainer.h ../dex.h ../audio.h | build
@@ -53,7 +53,7 @@ build/i18n_tests: $(I18N_TEST_OBJS)
 build/i18n_tests.o: i18n_tests.cpp ../i18n.h ../pet.h | build
 	$(CXX) $(CXXFLAGS) -c i18n_tests.cpp -o $@
 
-build/i18n.o: ../i18n.cpp ../i18n.h ../dex.h ../pet.h | build
+build/i18n.o: ../i18n.cpp ../i18n.h ../dex.h ../pet.h ../trainer.h | build
 	$(CXX) $(CXXFLAGS) -c ../i18n.cpp -o $@
 
 clean:

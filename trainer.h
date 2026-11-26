@@ -20,6 +20,7 @@
 
 #define PVP_HISTORY_SIZE 5
 #define PVP_NICK_MAX 10
+#define PVP_NICK_UNKNOWN "???"  // nick przeciwnika bez zadnej litery
 
 enum PvpResult : uint8_t { PVP_WIN, PVP_DRAW, PVP_LOSS, PVP_ABORTED };
 
@@ -34,6 +35,7 @@ struct TrainerAward {
   int8_t pointsDelta = 0;     // nominalna zmiana punktow (przed obcieciem progress do 0)
   uint8_t levelsGained = 0;
   bool applied = false;       // true gdy punkty byly dozwolone i mecz nie byl ABORTED
+  bool blocked = false;       // mecz rozliczony (W/L/D), ale punkty zablokowane przez FarmGuard; ABORTED daje false
 };
 
 struct FarmEntry {
@@ -57,7 +59,11 @@ int8_t trainerPointsDelta(PvpResult result, uint8_t myLevel, uint8_t oppLevel);
 TrainerAward trainerApplyResult(TrainerStats &stats, PvpResult result, uint8_t oppLevel, bool pointsAllowed);
 void sanitizeTrainerStats(TrainerStats &stats);
 
+// Blokuje, gdy nowEpoch == 0 (brak wiarygodnego czasu), gdy zegar jest cofniety wzgledem wpisu
+// albo gdy od ostatnich przyznanych punktow minelo mniej niz FARM_COOLDOWN_SEC.
 bool farmGuardAllows(const FarmGuard &guard, uint32_t opponentId, uint32_t nowEpoch);
+// Zegar cofniety wzgledem wpisu: epoch = nowEpoch (cooldown startuje od nowa). Wolac przed farmGuardAllows.
+void farmGuardResync(FarmGuard &guard, uint32_t opponentId, uint32_t nowEpoch);
 void farmGuardRecord(FarmGuard &guard, uint32_t opponentId, uint32_t nowEpoch);
 
 // Najnowszy wpis na indeksie 0; najstarszy wypada.

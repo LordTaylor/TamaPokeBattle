@@ -59,7 +59,10 @@ TrainerAward trainerApplyResult(TrainerStats &stats, PvpResult result, uint8_t o
   TrainerAward award;
   if (result != PVP_WIN && result != PVP_DRAW && result != PVP_LOSS) return award;
   countResult(stats, result);
-  if (!pointsAllowed) return award;
+  if (!pointsAllowed) {
+    award.blocked = true;
+    return award;
+  }
   award.applied = true;
   award.pointsDelta = trainerPointsDelta(result, stats.level, oppLevel);
   award.levelsGained = applyPoints(stats, award.pointsDelta);
@@ -80,13 +83,21 @@ static const FarmEntry *farmFind(const FarmGuard &g, uint32_t opponentId) {
 }
 
 bool farmGuardAllows(const FarmGuard &guard, uint32_t opponentId, uint32_t nowEpoch) {
+  if (nowEpoch == 0) return false;  // RTC niewazny
   const FarmEntry *e = farmFind(guard, opponentId);
-  if (!e || nowEpoch < e->epoch) return true;  // zegar cofniety: dozwolone
+  if (!e) return true;
+  if (nowEpoch < e->epoch) return false;  // zegar cofniety
   return nowEpoch - e->epoch >= FARM_COOLDOWN_SEC;
 }
 
+void farmGuardResync(FarmGuard &guard, uint32_t opponentId, uint32_t nowEpoch) {
+  if (nowEpoch == 0) return;
+  FarmEntry *e = const_cast<FarmEntry *>(farmFind(guard, opponentId));
+  if (e && nowEpoch < e->epoch) e->epoch = nowEpoch;
+}
+
 void farmGuardRecord(FarmGuard &guard, uint32_t opponentId, uint32_t nowEpoch) {
-  if (nowEpoch == 0) nowEpoch = 1;  // 0 oznacza pusty slot
+  if (nowEpoch == 0) return;  // 0 oznacza pusty slot
   FarmEntry *slot = const_cast<FarmEntry *>(farmFind(guard, opponentId));
   if (!slot) {
     slot = &guard.entries[0];
