@@ -26,8 +26,9 @@ enum PvpReason : uint8_t {
   PVP_REASON_TIMEOUT = 3,
   PVP_REASON_DESYNC = 4,
   PVP_REASON_PROTOCOL = 5,
+  PVP_REASON_BAD_STATS = 6,  // the engine rejected the opponent's READY statistics
 };
-constexpr uint8_t PVP_REASON_MAX = PVP_REASON_PROTOCOL;
+constexpr uint8_t PVP_REASON_MAX = PVP_REASON_BAD_STATS;
 
 enum PvpParseResult : uint8_t {
   PVP_PARSE_OK = 0,

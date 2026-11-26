@@ -142,6 +142,8 @@ bool PvpSession::submitRoundHash(uint32_t hash, bool battleOver, uint32_t nowMs)
 }
 
 bool PvpSession::onPeerHash(const PvpMessage &m, uint32_t nowMs) {
+  // Already finished: acknowledge the peer's (re)sent final hash so it stops retransmitting.
+  if (state_ == PVP_STATE_FINISHED) return m.round == round_ && m.finalRound != 0;
   if (state_ != PVP_STATE_BATTLE || m.round != round_ || peerHashGot_) return false;
   peerHashGot_ = true;
   peerHash_ = m.hash;

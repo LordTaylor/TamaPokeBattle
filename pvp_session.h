@@ -25,8 +25,13 @@
 // Side A is the device with the LOWER deviceId; RoundReady actions are oriented A/B.
 //
 // --- Contract for the integrator (T4) ---
-// * Identity: pass pvpDeviceIdFromMac(own MAC) to init(); receivers drop HELLO /
-//   CHALLENGE / ACCEPT whose deviceId does not match the source MAC.
+// * Identity: init() takes pvpDeviceIdFromMac(own STA MAC), where the MAC comes from
+//   esp_wifi_get_mac(WIFI_IF_STA) with WiFi in WIFI_STA mode, and ESP-NOW peers must be
+//   added with ifidx = WIFI_IF_STA so the source MAC seen by the receiver is that MAC.
+//   Do NOT use (uint32_t)ESP.getEfuseMac(): its byte order is reversed and every packet
+//   would be rejected. Receivers drop HELLO / CHALLENGE / ACCEPT whose deviceId does not
+//   match the source MAC. This stops id spoofing inside the peer table; it does not stop
+//   a modified firmware from choosing its own MAC (esp_wifi_set_mac) to farm points.
 // * Memory: sizeof(PvpSession) is about 2.6 KB. Declare it as a static global, never
 //   on a task stack and never new/malloc'd in a loop.
 // * Threading: call every method from loop() only. The ESP-NOW receive callback must
@@ -39,7 +44,8 @@
 //   (see pvp_time.h). Call tick() at least every ~100 ms.
 // * READY.hp may be 0 ("receiver derives it", PVP_HP_MAX bounds it otherwise). Ranges
 //   against the Pokedex (stats per level, types per species) are NOT checked here:
-//   T4 must run the engine-side validator on peerReady() before using it.
+//   T4 must run the engine-side validator on peerReady() before using it and call
+//   rejectOpponent() when it fails (ABORT, no points).
 // * Leaving the result screen: call canLeave(nowMs) first. After FINISHED the session
 //   keeps delivering the final hash for up to PVP_LINGER_MS; leaving earlier could
 //   make the peer end ABORTED (no points). startDiscovery() enforces the same rule.
@@ -67,6 +73,8 @@ class PvpSession {
   bool submitDefaultAction(uint32_t nowMs);  // after ActionTimeout: PVP_DEFAULT_ACTION
   bool submitRoundHash(uint32_t hash, bool battleOver, uint32_t nowMs);
   void abort(uint32_t nowMs);
+  // The engine-side validator rejected peerReady(): abort with ABORT(BAD_STATS), no points.
+  bool rejectOpponent(uint32_t nowMs);
 
   // --- Inputs ---
   void onPacket(const uint8_t *data, size_t len, const uint8_t mac[6], uint32_t nowMs);
@@ -107,7 +115,7 @@ class PvpSession {
   bool fromPeer(const PvpMessage &m, const uint8_t *mac) const;
   static void sendCallback(void *ctx, const uint8_t *data, uint8_t len);
 
-  // Handshake and dispatch (pvp_session.cpp)
+  // Handshake (pvp_session_handshake.cpp) and dispatch (pvp_session.cpp)
   void onBadVersion(const PvpMessage &m, const uint8_t *mac, uint32_t nowMs);
   void onDiscoveryHello(const PvpMessage &m, const uint8_t *mac, uint32_t nowMs);
   void onNewChallenge(const PvpMessage &m, const uint8_t *mac, uint32_t nowMs);

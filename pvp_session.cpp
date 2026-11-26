@@ -21,10 +21,10 @@ void PvpSession::init(uint32_t localDeviceId, const char *nick, uint8_t trainerL
   localId_ = localDeviceId;
   trainerLevel_ = trainerLevel;
   memset(nick_, 0, sizeof(nick_));
-  strncpy(nick_, nick ? nick : "", PVP_NICK_MAX);
+  strncpy(nick_, nick ? nick : "", PVP_NICK_LEN);
   if (!pvpValidNick(nick_)) {
     memset(nick_, 0, sizeof(nick_));
-    strncpy(nick_, PVP_DEFAULT_NICK, PVP_NICK_MAX);
+    strncpy(nick_, PVP_DEFAULT_NICK, PVP_NICK_LEN);
   }
   state_ = PVP_STATE_IDLE;
   clearSession();
@@ -285,6 +285,10 @@ void PvpSession::onBye(uint32_t nowMs) {
                              localHashSet_ && localFinal_;
   if (!waitingForFinalHash) return;
   tx_.reset();  // a peer that finished has everything we sent
+  PvpMessage bye;
+  bye.type = PVP_MSG_BYE;
+  bye.session = sessionId_;
+  sendFire(bye);
   enterState(PVP_STATE_FINISHED, nowMs);
   pushEvent(PVP_EVT_FINISHED);
 }

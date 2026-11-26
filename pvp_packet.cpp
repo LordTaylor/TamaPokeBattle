@@ -176,7 +176,7 @@ bool pvpValidNick(const char nick[PVP_NICK_BUF]) {
     if (!((c >= 'A' && c <= 'Z') || c == '.' || c == '-')) return false;
     n++;
   }
-  if (n == 0 || n > PVP_NICK_MAX) return false;
+  if (n == 0 || n > PVP_NICK_LEN) return false;
   for (size_t i = n; i < PVP_NICK_BUF; i++) {
     if (nick[i] != '\0') return false;  // canonical: zero padding only
   }

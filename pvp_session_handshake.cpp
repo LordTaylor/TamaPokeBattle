@@ -31,6 +31,8 @@ void PvpSession::establish(uint32_t nowMs) {
   msg.type = PVP_MSG_ACCEPT;
   fillIdentity(msg);
   msg.nonce = localNonce_;
+  lastRxMs_ = nowMs;  // the human may have taken long to accept; the silence clock starts now
+  lastKeepaliveMs_ = nowMs;
   enterState(PVP_STATE_HANDSHAKE, nowMs);
   if (sendReliable(msg, 0, nowMs)) pushEvent(PVP_EVT_ACCEPTED);
 }
@@ -58,6 +60,14 @@ void PvpSession::abort(uint32_t nowMs) {
   } else if (inSession() && state_ != PVP_STATE_FINISHED) {
     abortLocal(PVP_REASON_USER, nowMs);
   }
+}
+
+bool PvpSession::rejectOpponent(uint32_t nowMs) {
+  bool live = state_ == PVP_STATE_HANDSHAKE || state_ == PVP_STATE_READY_EXCHANGE ||
+              state_ == PVP_STATE_BATTLE;
+  if (!live) return false;
+  abortLocal(PVP_REASON_BAD_STATS, nowMs);
+  return true;
 }
 
 void PvpSession::abortLocal(uint8_t reason, uint32_t nowMs) {
@@ -190,7 +200,6 @@ void PvpSession::tickChallenge(uint32_t nowMs) {
   }
   tx_.tick(nowMs, &PvpSession::sendCallback, this);
 }
-
 
 // Unsolicited DECLINE / VERSION replies are rate limited so a flood of foreign
 // CHALLENGEs can neither fill the send queue nor push real events out.

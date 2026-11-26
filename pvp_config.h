@@ -6,13 +6,13 @@
 
 // --- Wire format ---
 constexpr uint16_t PVP_MAGIC = 0x5450;
-constexpr uint8_t PVP_PROTO_VERSION = 1;
+constexpr uint8_t PVP_PROTO_VERSION = 2;  // 2: CHALLENGE/ACCEPT carry nick+level, HELLO has no busy flag
 constexpr uint8_t PVP_HEADER_SIZE = 13;     // magic2 proto1 type1 session4 seq2 len1 crc2
 constexpr uint8_t PVP_ESPNOW_MAX = 250;     // ESP-NOW payload limit
 constexpr uint8_t PVP_MAX_PACKET = 48;      // our largest packet (header + payload) fits here
 
-constexpr uint8_t PVP_NICK_MAX = 10;        // characters, without NUL
-constexpr uint8_t PVP_NICK_BUF = PVP_NICK_MAX + 1;
+constexpr uint8_t PVP_NICK_LEN = 10;        // characters, without NUL
+constexpr uint8_t PVP_NICK_BUF = PVP_NICK_LEN + 1;
 constexpr char PVP_DEFAULT_NICK[] = "PLAYER";  // used when the local nick is invalid
 
 // Fixed payload sizes per message type.
@@ -34,8 +34,9 @@ constexpr uint8_t PVP_LEVEL_MAX = 100;
 constexpr uint16_t PVP_STAT_MIN = 1;        // atk/def/spe
 constexpr uint16_t PVP_STAT_MAX = 999;      // atk/def/spe; game maximum is about 453
 // HP may be 0 on the wire: "receiver derives it" (battle engine hpFor/turnHpFor).
-// Game maximum of the derived turn HP is 983 (30 + 5 * level + def), hence 1500.
-constexpr uint16_t PVP_HP_MAX = 1500;
+// Game maximum of the derived turn HP is 983 (30 + 5 * level + def); the battle engine
+// accepts 0..999, so the wire limit matches it.
+constexpr uint16_t PVP_HP_MAX = 999;
 constexpr uint8_t PVP_TYPE_MAX = 18;        // TYPE_FAIRY in dex.h (0 = none)
 constexpr uint8_t PVP_ACTION_COUNT = 5;     // BattleAction 0..4
 constexpr uint8_t PVP_DEFAULT_ACTION = 0;   // BATTLE_ATTACK

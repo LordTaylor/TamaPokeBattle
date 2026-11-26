@@ -49,7 +49,7 @@ void PvpReliableTx::tick(uint32_t nowMs, SendFn send, void *ctx) {
   for (Pending &p : items_) {
     if (!p.active || !pvpElapsed(nowMs, p.nextMs, 0)) continue;
     send(ctx, p.data, p.len);
-    if (p.sends < 255) p.sends++;
+    if (p.sends < UINT8_MAX) p.sends++;
     bool fast = p.sends <= PVP_RETX_FAST_COUNT;  // sends counts the original too
     p.nextMs = nowMs + (fast ? PVP_RETX_INTERVAL_MS : PVP_RETX_SLOW_MS);
   }

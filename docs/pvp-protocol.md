@@ -7,8 +7,16 @@ integrator is in the header comment of `pvp_session.h`.
 
 Little-endian, fixed sizes, at most `PVP_MAX_PACKET` (48) bytes, far below the ESP-NOW limit of 250.
 Header (13 bytes): magic `0x5450`, proto, type, session, seq, payload length, CRC-16/CCITT-FALSE
-over the whole packet with the CRC field zeroed. `deviceId` is the last four MAC bytes
-(`pvpDeviceIdFromMac`); HELLO/CHALLENGE/ACCEPT with a mismatching id are dropped.
+over the whole packet with the CRC field zeroed. Protocol version is 2. `deviceId` is the last
+four MAC bytes (`pvpDeviceIdFromMac`); HELLO/CHALLENGE/ACCEPT with a mismatching id are dropped.
+
+## Identity contract
+
+The id is `pvpDeviceIdFromMac(MAC)` with the MAC from `esp_wifi_get_mac(WIFI_IF_STA)` (WiFi in
+`WIFI_STA` mode), and ESP-NOW peers use `ifidx = WIFI_IF_STA`. `(uint32_t)ESP.getEfuseMac()` has
+the reverse byte order and would make every packet get rejected. Honest scope: binding the id
+to the MAC protects the peer table against id spoofing; it does not stop someone running a
+modified firmware from changing its MAC (`esp_wifi_set_mac`) to farm points against itself.
 
 ## Outcome rules
 
@@ -26,7 +34,7 @@ over the whole packet with the CRC field zeroed. `deviceId` is the last four MAC
   corruption only. Threat model: someone with a modified firmware can write points to their own
   NVS anyway, so PvP cheating hurts an honest player only marginally (a loss gives 1 point
   instead of 3).
-- **Stats are validated by range only** (level 1..100, atk/def/spe 1..999, hp 0..1500 where 0 means
+- **Stats are validated by range only** (level 1..100, atk/def/spe 1..999, hp 0..999 where 0 means
   "receiver derives it", types 0..18). Consistency with the Pokedex (stats per level, types per
   species) must be checked by the engine-side validator before use.
 - **Quitting loser:** an ABORT gives 0 points to both sides, including the winner. Options:

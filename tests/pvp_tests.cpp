@@ -1,3 +1,4 @@
+#include "trainer.h"  // first on purpose: its PVP_* macros must not collide with pvp_config.h
 #include "pvp_test_harness.h"
 
 // ---------------------------------------------------------------- packets
@@ -163,6 +164,7 @@ static void testValueRanges() {
   r = ok; r.dex = 387;                        EXPECT_TRUE(!pvpValidReady(r));
   r = ok; r.hp = 0;                           EXPECT_TRUE(pvpValidReady(r));  // 0 = receiver derives HP
   r = ok; r.hp = 983;                         EXPECT_TRUE(pvpValidReady(r));  // game maximum
+  r = ok; r.hp = 999;                         EXPECT_TRUE(pvpValidReady(r));
   r = ok; r.hp = PVP_HP_MAX + 1;              EXPECT_TRUE(!pvpValidReady(r));
   r = ok; r.atk = 65535;                      EXPECT_TRUE(!pvpValidReady(r));
   r = ok; r.def = 0;                          EXPECT_TRUE(!pvpValidReady(r));
@@ -877,6 +879,116 @@ static void testChallengeCarriesNickForUnknownPeer() {
   EXPECT_EQ(e.peer.trainerLevel, 9);
 }
 
+// ------------------------------------------------ second review fixes
+
+// The human accepts long after the CHALLENGE arrived: the silence clock must
+// restart at accept(), not abort on the very next tick.
+static void checkLateAcceptSurvives(uint32_t startMs) {
+  ScriptedPeer sp;
+  sp.now = startMs;
+  sp.s.startDiscovery(sp.now);
+  sp.hello();
+  PvpMessage c = sp.msg(PVP_MSG_CHALLENGE, true);
+  c.deviceId = ScriptedPeer::PEER_ID;
+  strcpy(c.nick, "ASH");
+  sp.inject(c);
+  sp.advance(12000);
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_CHALLENGED);
+  EXPECT_TRUE(sp.s.accept(0x1234, sp.now));
+  sp.s.tick(sp.now);  // before any packet from the peer is delivered
+  sp.pump();
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_HANDSHAKE);
+  EXPECT_EQ(sp.count(PVP_EVT_ABORTED), 0);
+  sp.advance(PVP_PEER_TIMEOUT_MS - 200);
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_HANDSHAKE);
+}
+
+static void testLateAcceptDoesNotAbort() {
+  checkLateAcceptSurvives(5000);
+  checkLateAcceptSurvives(0xFFFFFFFFu - 6000);
+}
+
+static void testLateAcceptThenFullBattle() {
+  TestLink l(0x1111, 0x2222);
+  l.d[1].autoAccept = false;
+  l.d[0].s.startDiscovery(l.now);
+  l.d[1].s.startDiscovery(l.now);
+  l.step(12000);
+  EXPECT_EQ((int)l.d[1].s.state(), (int)PVP_STATE_CHALLENGED);
+  EXPECT_TRUE(l.d[1].s.accept(0x777, l.now));
+  EXPECT_TRUE(l.runUntil(30000, finished));
+  expectCleanBattle(l, 4);
+}
+
+// After a lost final hash the peer finishes via BYE; our BYE and ACK of its
+// retransmitted final hash let it stop quickly, and nobody is stuck in canLeave.
+static void testFinishedSidesSettleWithoutPingPong() {
+  const int losses[3] = { 20, 40, 60 };
+  int stuck = 0, asymmetric = 0, runs = 0;
+  for (int loss : losses) {
+    for (uint32_t seed = 1; seed <= 100; seed++) {
+      TestLink l(0x1111, 0x2222);
+      l.rng.s = seed * 104729u + (uint32_t)loss;
+      l.lossPct = loss;
+      l.dupPct = 10;
+      l.jitterMs = 60;
+      l.d[0].lastRound = l.d[1].lastRound = 2;
+      l.d[0].s.startDiscovery(l.now);
+      l.d[1].s.startDiscovery(l.now);
+      l.step(150000);
+      runs++;
+      bool f0 = l.d[0].s.state() == PVP_STATE_FINISHED;
+      bool f1 = l.d[1].s.state() == PVP_STATE_FINISHED;
+      if (f0 != f1) asymmetric++;
+      if (f0 && f1) {
+        l.step(PVP_LINGER_MS + 500);
+        if (!l.d[0].s.canLeave(l.now) || !l.d[1].s.canLeave(l.now)) stuck++;
+        EXPECT_TRUE(l.d[0].s.droppedPackets() == 0 && l.d[1].s.droppedPackets() == 0);
+      }
+    }
+  }
+  EXPECT_EQ(runs, 300);
+  EXPECT_EQ(asymmetric, 0);
+  EXPECT_EQ(stuck, 0);
+}
+
+static void testFinishedAcksRetransmittedFinalHashAndSendsBye() {
+  ScriptedPeer sp;
+  toWaitingForFinalHash(sp, true);
+  size_t mark = sp.sent.size();
+  sp.inject(sp.msg(PVP_MSG_BYE, false));  // peer finished first
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_FINISHED);
+  EXPECT_TRUE(sp.sentCount(PVP_MSG_BYE, mark) >= 1);  // we confirm with our own BYE
+
+  mark = sp.sent.size();
+  PvpMessage h = sp.msg(PVP_MSG_ROUND_HASH, true);  // its final hash finally arrives (retransmit)
+  h.round = 0; h.hash = 0x77; h.finalRound = 1;
+  sp.inject(h);
+  EXPECT_EQ(sp.sentCount(PVP_MSG_ACK, mark), 1);
+  sp.inject(h);
+  EXPECT_EQ(sp.sentCount(PVP_MSG_ACK, mark), 2);
+  EXPECT_EQ(sp.count(PVP_EVT_FINISHED), 1);
+}
+
+static void testRejectOpponentAbortsWithBadStats() {
+  ScriptedPeer sp;
+  EXPECT_TRUE(!sp.s.rejectOpponent(sp.now));  // nothing to reject outside a session
+  sp.toBattle();
+  size_t mark = sp.sent.size();
+  EXPECT_TRUE(sp.s.rejectOpponent(sp.now));
+  sp.pump();
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_ABORTED);
+  EXPECT_TRUE(!sp.s.resultCounts());
+  EXPECT_EQ(sp.log.back().type, PVP_EVT_ABORTED);
+  EXPECT_EQ(sp.log.back().reason, PVP_REASON_BAD_STATS);
+  PvpMessage m;
+  bool found = false;
+  for (size_t i = mark; i < sp.sent.size(); i++) {
+    if (pvpParse(sp.sent[i].data, sp.sent[i].len, m) == PVP_PARSE_OK && m.type == PVP_MSG_ABORT) found = true;
+  }
+  EXPECT_TRUE(found && m.reason == PVP_REASON_BAD_STATS);
+}
+
 int main() {
   testCrcVector();
   testRoundTripAllTypes();
@@ -917,6 +1029,11 @@ int main() {
   testVersionMismatchFloodIsRateLimited();
   testDeviceIdMustMatchSourceMac();
   testChallengeCarriesNickForUnknownPeer();
+  testLateAcceptDoesNotAbort();
+  testLateAcceptThenFullBattle();
+  testFinishedAcksRetransmittedFinalHashAndSendsBye();
+  testFinishedSidesSettleWithoutPingPong();
+  testRejectOpponentAbortsWithBadStats();
   if (failures) {
     std::cerr << failures << " Fehler\n";
     return 1;
