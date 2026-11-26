@@ -111,6 +111,26 @@ static void testWildBattleStartGate() {
   EXPECT_TRUE(!canStartWildBattle(false, false, 1));
 }
 
+static void testStepEncounterGoalStaysInRange() {
+  for (int roll = 0; roll < 256; roll++) {
+    uint16_t goal = stepEncounterGoal((uint8_t)roll);
+    EXPECT_TRUE(goal >= STEP_ENCOUNTER_MIN && goal <= STEP_ENCOUNTER_MAX);
+  }
+  EXPECT_EQ(stepEncounterGoal(0), STEP_ENCOUNTER_MIN);
+  EXPECT_EQ(stepEncounterGoal(99), STEP_ENCOUNTER_MAX);
+}
+
+static void testStepEncounterAdvanceCountsDown() {
+  uint16_t left = 300;
+  EXPECT_TRUE(!stepEncounterAdvance(left, 299));
+  EXPECT_EQ(left, 1);
+  EXPECT_TRUE(stepEncounterAdvance(left, 1));
+  EXPECT_EQ(left, 0);
+  left = 10;
+  EXPECT_TRUE(stepEncounterAdvance(left, 500));
+  EXPECT_EQ(left, 0);
+}
+
 static void testWildLevelStaysNearPetLevel() {
   EXPECT_EQ(wildLevelFor(1, 0), 1);
   EXPECT_EQ(wildLevelFor(10, 0), 9);
@@ -390,6 +410,8 @@ int main() {
   testRoundLimitEndsDefensiveCase();
   testDerivedHpUsesLevelAndDefense();
   testWildBattleStartGate();
+  testStepEncounterGoalStaysInRange();
+  testStepEncounterAdvanceCountsDown();
   testWildLevelStaysNearPetLevel();
   testWildSpeciesUsesHatchableNonLegendaryPool();
   testNightWildSpeciesPreferGhostPoisonBug();

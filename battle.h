@@ -68,6 +68,14 @@ struct BattleTurnResult {
 };
 
 bool canStartWildBattle(bool isEgg, bool sleeping, uint8_t ceremony);
+
+// Step-triggered wild encounters: the pet meets a wild Pokemon every
+// STEP_ENCOUNTER_MIN..STEP_ENCOUNTER_MAX walked steps.
+constexpr uint16_t STEP_ENCOUNTER_MIN = 300;
+constexpr uint16_t STEP_ENCOUNTER_MAX = 900;
+uint16_t stepEncounterGoal(uint8_t roll);
+// Subtracts walked steps from remaining; returns true once the goal is reached.
+bool stepEncounterAdvance(uint16_t &remaining, uint16_t steps);
 uint8_t wildLevelFor(uint8_t petLevel, uint8_t luckRoll);
 int16_t pickWildSpecies(uint8_t roll, uint8_t phase = 1);
 BattleStats wildBattleStats(int16_t dex, uint8_t level);

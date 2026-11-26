@@ -206,6 +206,20 @@ bool canStartWildBattle(bool isEgg, bool sleeping, uint8_t ceremony) {
   return !isEgg && !sleeping && ceremony == 0;
 }
 
+uint16_t stepEncounterGoal(uint8_t roll) {
+  uint16_t span = STEP_ENCOUNTER_MAX - STEP_ENCOUNTER_MIN;
+  return STEP_ENCOUNTER_MIN + (uint16_t)((uint32_t)(roll > 99 ? 99 : roll) * span / 99);
+}
+
+bool stepEncounterAdvance(uint16_t &remaining, uint16_t steps) {
+  if (steps >= remaining) {
+    remaining = 0;
+    return true;
+  }
+  remaining -= steps;
+  return false;
+}
+
 uint8_t wildLevelFor(uint8_t petLevel, uint8_t luckRoll) {
   int base = (int)(petLevel ? petLevel : 1);
   int delta;
