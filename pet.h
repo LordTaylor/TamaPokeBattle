@@ -8,6 +8,7 @@
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
 #define PET_TICK_MS 60000UL
+#define PVP_BATTLE_KEY "pvpbat"            // NVS: walka PvP w toku (<= 15 znakow)
 // Minutos de juego por nivel. Con 60, CHARMANDER evoluciona a las ~16 h
 // de juego con cuidado perfecto. Baja a 1 para ver evoluciones al momento.
 #define MINUTES_PER_LEVEL 60
@@ -343,6 +344,11 @@ public:
   void setTrainer(const char *name);
   bool hasTrainer() const { return trainer[0] != 0; }
   TrainerAward recordPvpMatch(PvpResult result, const char *oppNick, size_t oppNickLen, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch);
+  // Ucieczka z walki PvP: -PVP_QUIT_PENALTY punktow. Flaga "walka w toku" (NVS, poza backupem)
+  // karze tez wylaczenie urzadzenia w trakcie walki: kara przy nastepnym begin().
+  bool recordPvpQuit();  // kara tylko gdy walka w toku (flaga); false = brak kary
+  void pvpBattleBegin();
+  void pvpBattleEnd();
   bool hasMedal(uint16_t m) const { return medals & m; }
   bool showMedal() const { return deadlineActive(millis(), medalUntil); }
   bool showMilestone() const { return deadlineActive(millis(), milestoneUntil); }
@@ -417,5 +423,8 @@ private:
   void save();
   void load();
   void loadTrainerStats();
+  void applyPendingBattleQuit();
+  void clearBattleFlag();
+  bool pvpBattleActive = false;  // lustro flagi PVP_BATTLE_KEY w NVS (wczytane w begin())
   static uint8_t clamp100(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
 };

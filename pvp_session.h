@@ -50,7 +50,8 @@
 //   keeps delivering the final hash for up to PVP_LINGER_MS; leaving earlier could
 //   make the peer end ABORTED (no points). startDiscovery() enforces the same rule.
 // * Outcome: only state()==FINISHED / resultCounts() may award points or badges.
-//   ABORTED (including a quitting loser) gives nothing to either side.
+//   ABORTED (including a quitting loser) gives nothing to either side. The quitter
+//   is penalised locally (Pet::recordPvpQuit, docs/trainer-level.md "Ucieczka z walki").
 // * Deliberately NOT protected (documented in docs/pvp-protocol.md): commit-reveal of
 //   nonces and actions, encryption/authentication, stats checked against the Pokedex.
 //

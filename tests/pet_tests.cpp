@@ -1341,7 +1341,70 @@ static void testTrainerStatsDefaultsForOldSaveAndGarbageBlobs() {
   for (const PvpHistoryEntry &e : p.pvpHistory) EXPECT_TRUE(e.oppLevel <= TRAINER_LEVEL_MAX && e.nick[PVP_NICK_MAX] == 0);
 }
 
+static void testPvpQuitFlagPenalizesAfterRestart() {
+  Pet p;
+  p.begin();
+  p.trainerStats.level = 3; p.trainerStats.progress = 5;
+  PetTestAccess::save(p);
+  p.pvpBattleBegin();
+  p.pvpBattleBegin();                                   // wielokrotne begin: bez kary
+  EXPECT_EQ(p.trainerStats.progress, 5);
+  reloadFromNvs(p);                                     // "restart" w trakcie walki
+  EXPECT_EQ(p.trainerStats.progress, 5 - PVP_QUIT_PENALTY);
+  EXPECT_EQ(p.trainerStats.level, 3);
+  EXPECT_TRUE(!PetTestAccess::prefs(p).isKey(PVP_BATTLE_KEY));
+  reloadFromNvs(p);                                     // flaga skasowana: bez drugiej kary
+  EXPECT_EQ(p.trainerStats.progress, 5 - PVP_QUIT_PENALTY);
+
+  p.pvpBattleBegin();
+  p.pvpBattleEnd();                                     // poprawny koniec: bez kary
+  reloadFromNvs(p);
+  EXPECT_EQ(p.trainerStats.progress, 5 - PVP_QUIT_PENALTY);
+
+  EXPECT_TRUE(!p.recordPvpQuit());                      // bez flagi: bez kary
+  EXPECT_EQ(p.trainerStats.progress, 5 - PVP_QUIT_PENALTY);
+
+  p.pvpBattleBegin();
+  EXPECT_TRUE(p.recordPvpQuit());                       // swiadome wyjscie w walce
+  EXPECT_EQ(p.trainerStats.progress, 5 - 2 * PVP_QUIT_PENALTY);
+  EXPECT_TRUE(!PetTestAccess::prefs(p).isKey(PVP_BATTLE_KEY));
+  EXPECT_TRUE(!p.recordPvpQuit());                      // druga kara za te sama walke: nie
+  reloadFromNvs(p);                                     // restart po quit: bez kary, kara zapisana
+  EXPECT_EQ(p.trainerStats.progress, 5 - 2 * PVP_QUIT_PENALTY);
+  EXPECT_EQ(p.trainerStats.wins, 0);
+}
+
+static void testPvpMatchResultClearsBattleFlag() {
+  Pet p;
+  p.begin();
+  p.trainerStats.level = 3; p.trainerStats.progress = 5;
+  PetTestAccess::save(p);
+  p.pvpBattleBegin();
+  p.recordPvpMatch(PVP_WIN, "X", 1, 1, 9, 100000);
+  EXPECT_TRUE(!PetTestAccess::prefs(p).isKey(PVP_BATTLE_KEY));
+  uint16_t afterWin = p.trainerStats.progress;
+  EXPECT_TRUE(!p.recordPvpQuit());                      // wyjscie z ekranu wyniku: bez kary
+  reloadFromNvs(p);                                     // restart po wyniku: bez kary
+  EXPECT_EQ(p.trainerStats.progress, afterWin);
+}
+
+static void testPvpQuitFlagClearedByImportAndWipe() {
+  Pet p;
+  p.begin();
+  uint8_t blob[Pet::BACKUP_MAX_BYTES];
+  size_t n = p.exportBackup(blob, sizeof(blob));
+  p.pvpBattleBegin();
+  EXPECT_TRUE(p.importBackup(blob, n));
+  EXPECT_TRUE(!PetTestAccess::prefs(p).isKey(PVP_BATTLE_KEY));
+  p.pvpBattleBegin();
+  p.factoryReset();
+  EXPECT_TRUE(!PetTestAccess::prefs(p).isKey(PVP_BATTLE_KEY));
+}
+
 int main() {
+  testPvpQuitFlagPenalizesAfterRestart();
+  testPvpMatchResultClearsBattleFlag();
+  testPvpQuitFlagClearedByImportAndWipe();
   testTrainerStatsPersistAndSurviveBackupImport();
   testRecordPvpMatchDistrustsNetworkInput();
   testPvpFarmGuardWithBadClock();
