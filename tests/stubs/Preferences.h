@@ -15,6 +15,11 @@ public:
     blobs.clear();
   }
 
+  bool remove(const char *key) {
+    std::string k(key);
+    return values.erase(k) + blobs.erase(k) > 0;
+  }
+
   bool isKey(const char *key) const {
     std::string k(key);
     return values.count(k) || blobs.count(k);

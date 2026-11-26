@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include "time_utils.h"
 #include "dex.h"
+#include "trainer.h"
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -146,6 +147,10 @@ public:
   uint8_t bond = 0;
   char nick[12] = "";    // apodo (vacio = nombre de especie)
   char trainer[TRAINER_NAME_MAX + 1] = "";  // nick entrenador (PvP); vacio = aun no elegido; fuera del backup
+  // nivel de entrenador, anti-farmeo e historial PvP: del jugador, fuera del backup
+  TrainerStats trainerStats;
+  FarmGuard farmGuard;
+  PvpHistoryEntry pvpHistory[PVP_HISTORY_SIZE];
   // medallas: del individuo + contador acumulado entre todas las crianzas
   uint16_t medals = 0, totalMedals = 0;
   uint16_t newMedal = 0;   // recien conseguida(s), para celebrar
@@ -337,6 +342,7 @@ public:
   void rename(const char *name);
   void setTrainer(const char *name);
   bool hasTrainer() const { return trainer[0] != 0; }
+  TrainerAward recordPvpMatch(PvpResult result, const char *oppNick, size_t oppNickLen, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch);
   bool hasMedal(uint16_t m) const { return medals & m; }
   bool showMedal() const { return deadlineActive(millis(), medalUntil); }
   bool showMilestone() const { return deadlineActive(millis(), milestoneUntil); }
@@ -355,6 +361,7 @@ public:
   bool importBackup(const uint8_t *data, size_t length);
 
 private:
+  friend struct PetTestAccess;  // tylko tests/pet_tests.cpp
   Preferences prefs;
   uint32_t lastTick = 0;
   uint32_t eatUntil = 0;
@@ -409,5 +416,6 @@ private:
   ExpeditionItem expeditionRewardFor(ExpeditionSite site, uint8_t minutes, uint8_t luckRoll, uint8_t itemRoll) const;
   void save();
   void load();
+  void loadTrainerStats();
   static uint8_t clamp100(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
 };
