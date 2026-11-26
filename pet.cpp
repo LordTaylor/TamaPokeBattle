@@ -504,6 +504,20 @@ bool trainerNameHasLetter(const char *name) {
   return false;
 }
 
+static_assert(TRAINER_NAME_MAX == PVP_NICK_MAX, "nick trenera i nick w historii PvP musza miec ten sam limit");
+
+TrainerAward Pet::recordPvpMatch(PvpResult result, const char *oppNick, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch) {
+  if (result == PVP_ABORTED) return TrainerAward();
+  char nickClean[TRAINER_NAME_MAX + 1];
+  sanitizeTrainer(oppNick, nickClean);
+  bool allowed = farmGuardAllows(farmGuard, oppDeviceId, nowEpoch);
+  TrainerAward award = trainerApplyResult(trainerStats, result, oppLevel, allowed);
+  pvpHistoryPush(pvpHistory, nickClean, result, oppLevel, trainerStats.matchSeq);
+  if (award.applied) farmGuardRecord(farmGuard, oppDeviceId, nowEpoch);
+  save();
+  return award;
+}
+
 void Pet::setTrainer(const char *name) {
   sanitizeTrainer(name, trainer);
   if (!trainerNameHasLetter(trainer)) trainer[0] = 0;  // bez litery nick nie jest wazny
@@ -1657,6 +1671,27 @@ void Pet::save() {
   prefs.putUInt("edage", evoDeclinedAge);
   prefs.putString("nick", nick);
   prefs.putString("trainer", trainer);
+  prefs.putUChar("tlvl", trainerStats.level);
+  prefs.putUShort("tprog", trainerStats.progress);
+  prefs.putUShort("twin", trainerStats.wins);
+  prefs.putUShort("tlos", trainerStats.losses);
+  prefs.putUShort("tdrw", trainerStats.draws);
+  prefs.putUInt("tseq", trainerStats.matchSeq);
+  prefs.putBytes("tfarm", &farmGuard, sizeof(farmGuard));
+  prefs.putBytes("thist", pvpHistory, sizeof(pvpHistory));
+}
+
+void Pet::loadTrainerStats() {
+  trainerStats.level = prefs.getUChar("tlvl", TRAINER_LEVEL_MIN);
+  trainerStats.progress = prefs.getUShort("tprog", 0);
+  trainerStats.wins = prefs.getUShort("twin", 0);
+  trainerStats.losses = prefs.getUShort("tlos", 0);
+  trainerStats.draws = prefs.getUShort("tdrw", 0);
+  trainerStats.matchSeq = prefs.getUInt("tseq", 0);
+  sanitizeTrainerStats(trainerStats);
+  loadDexBitmap(prefs, "tfarm", reinterpret_cast<uint8_t *>(&farmGuard), sizeof(farmGuard));
+  loadDexBitmap(prefs, "thist", reinterpret_cast<uint8_t *>(pvpHistory), sizeof(pvpHistory));
+  sanitizePvpHistory(pvpHistory);
 }
 
 void Pet::load() {
@@ -1776,6 +1811,7 @@ void Pet::load() {
   prefs.getString("trainer", rawTrainer, sizeof(rawTrainer));
   sanitizeTrainer(rawTrainer, trainer);
   if (!trainerNameHasLetter(trainer)) trainer[0] = 0;
+  loadTrainerStats();
   // siembra: la mascota actual cuenta como criada (guardados antiguos)
   if (speciesId >= 1) registerSpecies(speciesId);
   ceremony = CER_NONE;

@@ -4,7 +4,10 @@
 #include <string>
 #include <vector>
 
+// testy trwalosci zagladaja do prefs (pole prywatne instancji Pet)
+#define private public
 #include "pet.h"
+#undef private
 #include "species_chirp.h"
 #include "time_utils.h"
 #include "dayphase.h"
@@ -1234,7 +1237,80 @@ static void testTrainerNameIsSanitizedPersistedAndOutsideBackup() {
   EXPECT_TRUE(std::strcmp(p.trainer, "RED.-") == 0);
 }
 
+static void reloadFromNvs(Pet &p) {
+  p.trainerStats = TrainerStats();
+  p.farmGuard = FarmGuard();
+  for (PvpHistoryEntry &e : p.pvpHistory) e = PvpHistoryEntry();
+  p.begin();
+}
+
+static void testTrainerStatsPersistAndSurviveBackupImport() {
+  Pet p;
+  p.begin();
+  EXPECT_EQ(p.trainerStats.level, 1);
+  p.trainerStats.progress = 11;
+  TrainerAward award = p.recordPvpMatch(PVP_WIN, "rival x!", 9, 0xABCDu, 10000);
+  EXPECT_TRUE(award.applied);
+  EXPECT_EQ(award.levelsGained, 1);
+  TrainerAward blocked = p.recordPvpMatch(PVP_LOSS, "RIVAL", 1, 0xABCDu, 10100);  // ta sama godzina
+  EXPECT_TRUE(!blocked.applied);
+  p.recordPvpMatch(PVP_ABORTED, "RIVAL", 1, 0x1u, 10200);  // nic nie zmienia
+  // zablokowany mecz nie odswieza cooldownu: godzina liczy sie od ostatnich PRZYZNANYCH punktow
+  EXPECT_TRUE(farmGuardAllows(p.farmGuard, 0xABCDu, 10000 + FARM_COOLDOWN_SEC));
+
+  reloadFromNvs(p);
+  EXPECT_EQ(p.trainerStats.level, 2);
+  EXPECT_EQ(p.trainerStats.progress, 4);
+  EXPECT_EQ(p.trainerStats.wins, 1);
+  EXPECT_EQ(p.trainerStats.losses, 1);
+  EXPECT_EQ(p.trainerStats.matchSeq, 2u);
+  EXPECT_TRUE(!farmGuardAllows(p.farmGuard, 0xABCDu, 10300));
+  EXPECT_EQ(p.pvpHistory[0].seq, 2u);
+  EXPECT_EQ(p.pvpHistory[1].seq, 1u);
+  EXPECT_TRUE(std::strcmp(p.pvpHistory[1].nick, "RIVALX") == 0);  // nick sanityzowany
+
+  Pet other;
+  uint8_t blob[Pet::BACKUP_MAX_BYTES] = {};
+  size_t size = other.exportBackup(blob, sizeof(blob));
+  EXPECT_TRUE(p.importBackup(blob, size));
+  reloadFromNvs(p);
+  EXPECT_EQ(p.trainerStats.level, 2);
+  EXPECT_EQ(p.trainerStats.matchSeq, 2u);
+}
+
+static void testTrainerStatsDefaultsForOldSaveAndGarbageBlobs() {
+  Pet p;
+  p.begin();
+  p.recordPvpMatch(PVP_WIN, "A", 5, 7, 5000);
+  for (const char *k : {"tlvl", "tprog", "twin", "tlos", "tdrw", "tseq", "tfarm", "thist"}) p.prefs.remove(k);
+  reloadFromNvs(p);  // stary save bez kluczy
+  EXPECT_EQ(p.trainerStats.level, 1);
+  EXPECT_EQ(p.trainerStats.progress, 0);
+  EXPECT_EQ(p.trainerStats.matchSeq, 0u);
+  EXPECT_EQ(p.pvpHistory[0].seq, 0u);
+  EXPECT_TRUE(farmGuardAllows(p.farmGuard, 7, 5001));
+
+  p.prefs.putUChar("tlvl", 0);
+  p.prefs.putUShort("tprog", 999);
+  const uint8_t junk[7] = {1, 2, 3, 4, 5, 6, 7};
+  p.prefs.putBytes("thist", junk, sizeof(junk));  // zla dlugosc
+  p.prefs.putBytes("tfarm", junk, sizeof(junk));
+  reloadFromNvs(p);
+  EXPECT_EQ(p.trainerStats.level, 1);
+  EXPECT_EQ(p.trainerStats.progress, 0);
+  EXPECT_EQ(p.pvpHistory[0].seq, 0u);
+  EXPECT_TRUE(p.pvpHistory[0].result <= PVP_ABORTED);
+
+  uint8_t big[sizeof(p.pvpHistory) + 40];
+  memset(big, 0xFF, sizeof(big));
+  p.prefs.putBytes("thist", big, sizeof(big));  // za dluga: bez przepelnienia bufora
+  reloadFromNvs(p);
+  for (const PvpHistoryEntry &e : p.pvpHistory) EXPECT_TRUE(e.oppLevel <= TRAINER_LEVEL_MAX && e.nick[PVP_NICK_MAX] == 0);
+}
+
 int main() {
+  testTrainerStatsPersistAndSurviveBackupImport();
+  testTrainerStatsDefaultsForOldSaveAndGarbageBlobs();
   testTrainerNameIsSanitizedPersistedAndOutsideBackup();
   testExpeditionWalkingBonus();
   testEggHatchesChosenStarter();
