@@ -69,3 +69,22 @@ build/trainer_tests.o: trainer_tests.cpp ../trainer.h | build
 
 build/trainer.o: ../trainer.cpp ../trainer.h | build
 	$(CXX) $(CXXFLAGS) -c ../trainer.cpp -o $@
+
+# --- PvP protocol tests ---
+PVP_TEST_OBJS = build/pvp_tests.o build/pvp_packet.o build/pvp_peers.o build/pvp_reliable.o build/pvp_session.o build/pvp_session_handshake.o build/pvp_session_battle.o
+PVP_HEADERS = ../pvp_config.h ../pvp_packet.h ../pvp_session.h ../pvp_event.h ../pvp_peers.h ../pvp_reliable.h ../pvp_ring.h ../pvp_seq_window.h ../pvp_state.h ../pvp_out_packet.h ../pvp_peer_info.h ../pvp_time.h ../battle.h
+
+pvp-test: build/pvp_tests
+	./build/pvp_tests
+
+build/pvp_tests: $(PVP_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_TEST_OBJS) -o $@
+
+build/pvp_tests.o: pvp_tests.cpp pvp_test_harness.h $(PVP_HEADERS) | build
+	$(CXX) $(CXXFLAGS) -c pvp_tests.cpp -o $@
+
+build/pvp_%.o: ../pvp_%.cpp $(PVP_HEADERS) | build
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+.PHONY: pvp-test
+test: pvp-test
