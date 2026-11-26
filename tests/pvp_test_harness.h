@@ -92,7 +92,9 @@ struct TestLink {
     uint32_t ids[2] = { idA, idB };
     for (int i = 0; i < 2; i++) {
       d[i].id = ids[i];
-      for (int b = 0; b < 6; b++) d[i].mac[b] = (uint8_t)(0x10 * (i + 1) + b);
+      d[i].mac[0] = (uint8_t)(0x10 * (i + 1));
+      d[i].mac[1] = 0;
+      for (int b = 0; b < 4; b++) d[i].mac[2 + b] = (uint8_t)(ids[i] >> (24 - 8 * b));  // deviceId = f(MAC)
       char nick[PVP_NICK_BUF] = "PLAYER-A";
       nick[7] = (char)('A' + i);
       d[i].s.init(ids[i], nick, 10);
@@ -181,7 +183,7 @@ struct ScriptedPeer {
   static constexpr uint32_t LOCAL_ID = 2;
   static constexpr uint32_t SESSION = 777;
   PvpSession s;
-  uint8_t peerMac[6] = { 0xAA, 1, 2, 3, 4, 5 };
+  uint8_t peerMac[6] = { 0xAA, 1, 0, 0, 0, 1 };  // pvpDeviceIdFromMac == PEER_ID
   uint32_t now = 5000;
   uint16_t peerSeq = 1;
   std::vector<PvpOutPacket> sent;
@@ -254,6 +256,7 @@ struct ScriptedPeer {
     PvpMessage acc = msg(PVP_MSG_ACCEPT, true);
     acc.deviceId = PEER_ID;
     acc.nonce = 0xBBBB0002u;
+    strcpy(acc.nick, "ASH");
     inject(acc);
     s.setLocalReady(testReady(), now);
     PvpMessage rdy = msg(PVP_MSG_READY, true);

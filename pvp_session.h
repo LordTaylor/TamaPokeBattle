@@ -11,6 +11,7 @@
 #include "pvp_ring.h"
 #include "pvp_seq_window.h"
 #include "pvp_state.h"
+#include "pvp_time.h"
 
 // PvP session state machine. Pure logic: no I/O, no clock, no randomness.
 // The caller feeds packets (onPacket) and time (tick / nowMs arguments), drains
@@ -22,6 +23,35 @@
 //   submitAction -> RoundReady{actionA,actionB,luck} -> (engine) -> submitRoundHash
 //   -> RoundConfirmed ... last round: submitRoundHash(hash, true) -> Finished.
 // Side A is the device with the LOWER deviceId; RoundReady actions are oriented A/B.
+//
+// --- Contract for the integrator (T4) ---
+// * Identity: pass pvpDeviceIdFromMac(own MAC) to init(); receivers drop HELLO /
+//   CHALLENGE / ACCEPT whose deviceId does not match the source MAC.
+// * Memory: sizeof(PvpSession) is about 2.6 KB. Declare it as a static global, never
+//   on a task stack and never new/malloc'd in a loop.
+// * Threading: call every method from loop() only. The ESP-NOW receive callback must
+//   only copy {mac, data, len} into a FreeRTOS queue and DROP packets with len < 0 or
+//   len > PVP_MAX_PACKET; loop() then feeds them to onPacket().
+// * Pump: after EVERY onPacket()/tick()/caller action drain popPacket() into
+//   esp_now_send and popEvent() into the UI. Queues hold PVP_SEND_QUEUE / PVP_EVENT_QUEUE
+//   entries and drop the newest on overflow (see droppedPackets/droppedEvents).
+// * Time: nowMs is millis(). Wrap-around and slightly earlier timestamps are tolerated
+//   (see pvp_time.h). Call tick() at least every ~100 ms.
+// * READY.hp may be 0 ("receiver derives it", PVP_HP_MAX bounds it otherwise). Ranges
+//   against the Pokedex (stats per level, types per species) are NOT checked here:
+//   T4 must run the engine-side validator on peerReady() before using it.
+// * Leaving the result screen: call canLeave(nowMs) first. After FINISHED the session
+//   keeps delivering the final hash for up to PVP_LINGER_MS; leaving earlier could
+//   make the peer end ABORTED (no points). startDiscovery() enforces the same rule.
+// * Outcome: only state()==FINISHED / resultCounts() may award points or badges.
+//   ABORTED (including a quitting loser) gives nothing to either side.
+// * Deliberately NOT protected (documented in docs/pvp-protocol.md): commit-reveal of
+//   nonces and actions, encryption/authentication, stats checked against the Pokedex.
+//
+// --- File split ---
+// pvp_session.cpp            plumbing, queues, onPacket dispatch, live-session tick
+// pvp_session_handshake.cpp  discovery, challenge/accept, abort, version, rate limiting
+// pvp_session_battle.cpp     READY exchange and lockstep rounds
 class PvpSession {
  public:
   void init(uint32_t localDeviceId, const char *nick, uint8_t trainerLevel);
@@ -49,6 +79,9 @@ class PvpSession {
   // --- Queries ---
   PvpState state() const { return state_; }
   bool resultCounts() const { return state_ == PVP_STATE_FINISHED; }
+  // False while a session is live (use abort()) and while a FINISHED session still
+  // has the final hash in flight; true otherwise.
+  bool canLeave(uint32_t nowMs) const;
   bool isSideA() const { return sideA_; }
   uint32_t sessionId() const { return sessionId_; }
   uint16_t round() const { return round_; }
@@ -89,6 +122,10 @@ class PvpSession {
   void tickDiscovery(uint32_t nowMs);
   void tickChallenge(uint32_t nowMs);
   void tickLive(uint32_t nowMs);
+  void tickFinished(uint32_t nowMs);
+  void onBye(uint32_t nowMs);
+  bool replyAllowed(uint32_t nowMs);
+  void fillIdentity(PvpMessage &msg) const;
 
   // Battle (pvp_session_battle.cpp)
   bool onReady(const PvpMessage &m, uint32_t nowMs);
@@ -121,6 +158,10 @@ class PvpSession {
   uint32_t lastRxMs_ = 0;
   uint32_t lastKeepaliveMs_ = 0;
   uint32_t nextHelloMs_ = 0;
+  uint32_t lastReplyMs_ = 0;
+  bool replySent_ = false;
+  char peerNick_[PVP_NICK_BUF] = {0};
+  uint8_t peerLevel_ = 0;
   uint32_t stateEnterMs_ = 0;
   uint32_t progressMs_ = 0;
 

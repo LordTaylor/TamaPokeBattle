@@ -11,7 +11,6 @@ static PvpMessage sampleMsg(uint8_t type) {
   m.nonce = 0x01020304;
   strcpy(m.nick, "ASH.KETCHU");
   m.trainerLevel = 42;
-  m.busy = 1;
   m.ready = testReady(386);
   m.ready.shiny = 1;
   m.round = 513;
@@ -49,12 +48,13 @@ static void testRoundTripAllTypes() {
       EXPECT_EQ(out.deviceId, in.deviceId);
       EXPECT_TRUE(strcmp(out.nick, "ASH.KETCHU") == 0);
       EXPECT_EQ(out.trainerLevel, in.trainerLevel);
-      EXPECT_EQ(out.busy, in.busy);
       EXPECT_EQ(out.version, PVP_PROTO_VERSION);
     }
     if (type == PVP_MSG_CHALLENGE || type == PVP_MSG_ACCEPT) {
       EXPECT_EQ(out.deviceId, in.deviceId);
       EXPECT_EQ(out.nonce, in.nonce);
+      EXPECT_TRUE(strcmp(out.nick, "ASH.KETCHU") == 0);
+      EXPECT_EQ(out.trainerLevel, in.trainerLevel);
     }
     if (type == PVP_MSG_READY) {
       EXPECT_EQ(out.ready.dex, in.ready.dex);
@@ -161,8 +161,9 @@ static void testValueRanges() {
   r = ok; r.level = 101;                      EXPECT_TRUE(!pvpValidReady(r));
   r = ok; r.dex = 0;                          EXPECT_TRUE(!pvpValidReady(r));
   r = ok; r.dex = 387;                        EXPECT_TRUE(!pvpValidReady(r));
-  r = ok; r.hp = 0;                           EXPECT_TRUE(!pvpValidReady(r));
-  r = ok; r.hp = PVP_STAT_MAX + 1;            EXPECT_TRUE(!pvpValidReady(r));
+  r = ok; r.hp = 0;                           EXPECT_TRUE(pvpValidReady(r));  // 0 = receiver derives HP
+  r = ok; r.hp = 983;                         EXPECT_TRUE(pvpValidReady(r));  // game maximum
+  r = ok; r.hp = PVP_HP_MAX + 1;              EXPECT_TRUE(!pvpValidReady(r));
   r = ok; r.atk = 65535;                      EXPECT_TRUE(!pvpValidReady(r));
   r = ok; r.def = 0;                          EXPECT_TRUE(!pvpValidReady(r));
   r = ok; r.spe = 1000;                       EXPECT_TRUE(!pvpValidReady(r));
@@ -575,7 +576,7 @@ static void testPeerListCapsAtEight() {
     m.type = PVP_MSG_HELLO;
     m.deviceId = 100 + i;
     strcpy(m.nick, "BOT");
-    uint8_t mac[6] = { 1, 1, 1, 1, 1, (uint8_t)i };
+    uint8_t mac[6] = { 1, 1, 0, 0, 0, (uint8_t)(100 + i) };
     sp.inject(m, mac);
   }
   EXPECT_EQ(sp.s.peers().count(), (int)PVP_MAX_PEERS);
@@ -588,6 +589,7 @@ static void testVersionMismatch() {
   sp.s.startDiscovery(sp.now);
   PvpMessage c = sp.msg(PVP_MSG_CHALLENGE, true);
   c.deviceId = ScriptedPeer::PEER_ID;
+  strcpy(c.nick, "ASH");
   uint8_t buf[PVP_MAX_PACKET];
   size_t n = pvpSerialize(c, buf, sizeof(buf));
   buf[2] = PVP_PROTO_VERSION + 1;
@@ -686,6 +688,195 @@ static void testAckAfterFinishLetsPeerComplete() {
   EXPECT_EQ(sp.count(PVP_EVT_ABORTED), 0);
 }
 
+// ------------------------------------------------ review fixes: time, BYE, floods
+
+static PvpMessage helloFrom(uint32_t id, const char *nick) {
+  PvpMessage m;
+  m.type = PVP_MSG_HELLO;
+  m.deviceId = id;
+  strcpy(m.nick, nick);
+  return m;
+}
+
+static void testNonMonotonicTimeDoesNotAbort() {
+  ScriptedPeer sp;
+  sp.toBattle();
+  PvpMessage keep = helloFrom(ScriptedPeer::PEER_ID, "ASH");
+  keep.session = ScriptedPeer::SESSION;
+  uint8_t buf[PVP_MAX_PACKET];
+  size_t n = pvpSerialize(keep, buf, sizeof(buf));
+  sp.s.onPacket(buf, n, sp.peerMac, sp.now + 5000);  // timestamp from "the future"
+  sp.s.tick(sp.now + 1);                             // loop time is earlier
+  sp.s.tick(sp.now + 4000);
+  sp.pump();
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_BATTLE);
+  EXPECT_EQ(sp.count(PVP_EVT_ABORTED), 0);
+}
+
+static void testSessionAcrossUint32Wrap() {
+  TestLink l(0x1111, 0x2222);
+  l.now = 0xFFFFFFFFu - 3000;
+  l.lossPct = 20;
+  l.d[0].s.startDiscovery(l.now);
+  l.d[1].s.startDiscovery(l.now);
+  EXPECT_TRUE(l.runUntil(60000, finished));
+  expectCleanBattle(l, 4);
+
+  ScriptedPeer sp;
+  sp.now = 0xFFFFFFFFu - 4000;
+  sp.toBattle();
+  sp.advance(PVP_PEER_TIMEOUT_MS - 100);
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_BATTLE);
+  sp.advance(200);
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_ABORTED);
+}
+
+// Drives the scripted session to "our final hash sent, peer's hash missing".
+static void toWaitingForFinalHash(ScriptedPeer &sp, bool final) {
+  sp.toBattle();
+  sp.s.submitAction(1, sp.now);
+  PvpMessage a = sp.msg(PVP_MSG_ACTION, true);
+  a.round = 0; a.action = 2;
+  sp.inject(a);
+  sp.s.submitRoundHash(0x77, final, sp.now);
+  sp.pump();
+}
+
+static void testByeFinishesWhenFinalHashWasLost() {
+  ScriptedPeer sp;
+  toWaitingForFinalHash(sp, true);
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_BATTLE);
+  sp.inject(sp.msg(PVP_MSG_BYE, false));  // peer finished; its final hash never arrived
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_FINISHED);
+  EXPECT_TRUE(sp.s.resultCounts());
+  EXPECT_EQ(sp.count(PVP_EVT_FINISHED), 1);
+  EXPECT_TRUE(sp.s.canLeave(sp.now));  // nothing left in flight
+  size_t mark = sp.sent.size();
+  sp.advance(500);
+  EXPECT_EQ(sp.sentCount(PVP_MSG_ROUND_HASH, mark), 0);
+}
+
+static void testByeIgnoredWhenNotAtFinalHash() {
+  ScriptedPeer early;
+  early.toBattle();
+  early.inject(early.msg(PVP_MSG_BYE, false));
+  EXPECT_EQ((int)early.s.state(), (int)PVP_STATE_BATTLE);
+
+  ScriptedPeer notFinal;
+  toWaitingForFinalHash(notFinal, false);  // a normal round hash, not the last round
+  notFinal.inject(notFinal.msg(PVP_MSG_BYE, false));
+  EXPECT_EQ((int)notFinal.s.state(), (int)PVP_STATE_BATTLE);
+  EXPECT_EQ(notFinal.count(PVP_EVT_FINISHED), 0);
+}
+
+static void testFinishedLingerIsBoundedAndGuardsLeaving() {
+  ScriptedPeer sp;
+  toWaitingForFinalHash(sp, true);
+  PvpMessage h = sp.msg(PVP_MSG_ROUND_HASH, true);
+  h.round = 0; h.hash = 0x77; h.finalRound = 1;
+  sp.inject(h);  // we are FINISHED, our own hash was never acknowledged
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_FINISHED);
+  EXPECT_TRUE(!sp.s.canLeave(sp.now));
+  EXPECT_TRUE(!sp.s.startDiscovery(sp.now));
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_FINISHED);
+
+  sp.advance(PVP_LINGER_MS + 200);
+  EXPECT_TRUE(sp.s.canLeave(sp.now));
+  size_t mark = sp.sent.size();
+  sp.advance(5000);
+  EXPECT_EQ(sp.sentCount(PVP_MSG_ROUND_HASH, mark), 0);  // stopped retransmitting
+  EXPECT_TRUE(sp.s.startDiscovery(sp.now));
+}
+
+static void testPeerByeReleasesFinishedSession() {
+  ScriptedPeer sp;
+  toWaitingForFinalHash(sp, true);
+  PvpMessage h = sp.msg(PVP_MSG_ROUND_HASH, true);
+  h.round = 0; h.hash = 0x77; h.finalRound = 1;
+  sp.inject(h);
+  EXPECT_TRUE(!sp.s.canLeave(sp.now));
+  sp.inject(sp.msg(PVP_MSG_BYE, false));
+  EXPECT_TRUE(sp.s.canLeave(sp.now));
+}
+
+static void testForeignChallengeFloodIsRateLimited() {
+  ScriptedPeer sp;
+  sp.toBattle();
+  size_t mark = sp.sent.size();
+  uint8_t other[6] = { 0xBB, 0, 0, 0, 0, 9 };
+  for (uint32_t i = 0; i < 200; i++) {
+    PvpMessage c;
+    c.type = PVP_MSG_CHALLENGE;
+    c.deviceId = 9;
+    strcpy(c.nick, "SPAM");
+    c.session = 5000 + i;
+    c.seq = 1;
+    sp.inject(c, other);
+  }
+  EXPECT_EQ(sp.sentCount(PVP_MSG_DECLINE, mark), 1);
+  sp.advance(PVP_REPLY_MIN_INTERVAL_MS + 10);
+  PvpMessage c;
+  c.type = PVP_MSG_CHALLENGE;
+  c.deviceId = 9; strcpy(c.nick, "SPAM"); c.session = 9999; c.seq = 1;
+  sp.inject(c, other);
+  EXPECT_EQ(sp.sentCount(PVP_MSG_DECLINE, mark), 2);
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_BATTLE);
+}
+
+static void testVersionMismatchFloodIsRateLimited() {
+  ScriptedPeer sp;
+  sp.s.startDiscovery(sp.now);
+  for (uint32_t i = 0; i < 100; i++) {
+    PvpMessage c = sp.msg(PVP_MSG_CHALLENGE, true);
+    c.session = 100 + i;
+    c.deviceId = ScriptedPeer::PEER_ID;
+    strcpy(c.nick, "ASH");
+    uint8_t buf[PVP_MAX_PACKET];
+    size_t n = pvpSerialize(c, buf, sizeof(buf));
+    buf[2] = 7;
+    pvpSealCrc(buf, n);
+    sp.injectRaw(buf, n);
+  }
+  EXPECT_EQ(sp.count(PVP_EVT_VERSION_MISMATCH), 1);
+  EXPECT_EQ(sp.sentCount(PVP_MSG_ABORT), 1);
+}
+
+static void testDeviceIdMustMatchSourceMac() {
+  ScriptedPeer sp;
+  sp.s.startDiscovery(sp.now);
+  sp.inject(helloFrom(7, "FAKE"));  // claims id 7 from the MAC of id 1
+  EXPECT_EQ(sp.count(PVP_EVT_PEER_FOUND), 0);
+  sp.hello();                       // genuine
+  EXPECT_EQ(sp.count(PVP_EVT_PEER_FOUND), 1);
+
+  uint8_t twin[6] = { 0xBB, 1, 0, 0, 0, 1 };  // same derived id, different MAC
+  sp.inject(helloFrom(ScriptedPeer::PEER_ID, "EVIL"), twin);
+  EXPECT_EQ(sp.s.peers().count(), 1);
+  EXPECT_TRUE(memcmp(sp.s.peers().at(0).mac, sp.peerMac, 6) == 0);
+  EXPECT_TRUE(strcmp(sp.s.peers().at(0).nick, "ASH") == 0);
+
+  PvpMessage c = sp.msg(PVP_MSG_CHALLENGE, true);  // id does not match the MAC either
+  c.deviceId = 7;
+  strcpy(c.nick, "FAKE");
+  sp.inject(c);
+  EXPECT_EQ((int)sp.s.state(), (int)PVP_STATE_DISCOVERY);
+  EXPECT_EQ(sp.count(PVP_EVT_CHALLENGE_RECEIVED), 0);
+}
+
+static void testChallengeCarriesNickForUnknownPeer() {
+  ScriptedPeer sp;
+  sp.s.startDiscovery(sp.now);  // the challenger was never seen in HELLO
+  PvpMessage c = sp.msg(PVP_MSG_CHALLENGE, true);
+  c.deviceId = ScriptedPeer::PEER_ID;
+  strcpy(c.nick, "BROCK");
+  c.trainerLevel = 9;
+  sp.inject(c);
+  EXPECT_EQ(sp.count(PVP_EVT_CHALLENGE_RECEIVED), 1);
+  const PvpEvent &e = sp.log.back();
+  EXPECT_TRUE(strcmp(e.peer.nick, "BROCK") == 0);
+  EXPECT_EQ(e.peer.trainerLevel, 9);
+}
+
 int main() {
   testCrcVector();
   testRoundTripAllTypes();
@@ -716,6 +907,16 @@ int main() {
   testVersionMismatch();
   testBitFlippedPacketsNeverChangeState();
   testAckAfterFinishLetsPeerComplete();
+  testNonMonotonicTimeDoesNotAbort();
+  testSessionAcrossUint32Wrap();
+  testByeFinishesWhenFinalHashWasLost();
+  testByeIgnoredWhenNotAtFinalHash();
+  testFinishedLingerIsBoundedAndGuardsLeaving();
+  testPeerByeReleasesFinishedSession();
+  testForeignChallengeFloodIsRateLimited();
+  testVersionMismatchFloodIsRateLimited();
+  testDeviceIdMustMatchSourceMac();
+  testChallengeCarriesNickForUnknownPeer();
   if (failures) {
     std::cerr << failures << " Fehler\n";
     return 1;

@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "pvp_time.h"
+
 void PvpReliableTx::reset() {
   for (Pending &p : items_) p.active = false;
 }
@@ -45,7 +47,7 @@ void PvpReliableTx::drop(uint8_t type, bool matchRound, uint16_t round) {
 
 void PvpReliableTx::tick(uint32_t nowMs, SendFn send, void *ctx) {
   for (Pending &p : items_) {
-    if (!p.active || (int32_t)(nowMs - p.nextMs) < 0) continue;
+    if (!p.active || !pvpElapsed(nowMs, p.nextMs, 0)) continue;
     send(ctx, p.data, p.len);
     if (p.sends < 255) p.sends++;
     bool fast = p.sends <= PVP_RETX_FAST_COUNT;  // sends counts the original too

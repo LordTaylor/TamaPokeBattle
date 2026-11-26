@@ -2,11 +2,11 @@
 
 #include <string.h>
 
+#include "pvp_time.h"
+
 static_assert(PVP_ACTION_COUNT == BATTLE_REST + 1, "PvP actions must match BattleAction");
 
 namespace {
-
-bool macEqual(const uint8_t *a, const uint8_t *b) { return memcmp(a, b, 6) == 0; }
 
 bool isReliable(uint8_t type) {
   return type == PVP_MSG_CHALLENGE || type == PVP_MSG_ACCEPT || type == PVP_MSG_READY ||
@@ -24,7 +24,7 @@ void PvpSession::init(uint32_t localDeviceId, const char *nick, uint8_t trainerL
   strncpy(nick_, nick ? nick : "", PVP_NICK_MAX);
   if (!pvpValidNick(nick_)) {
     memset(nick_, 0, sizeof(nick_));
-    strncpy(nick_, "PLAYER", PVP_NICK_MAX);
+    strncpy(nick_, PVP_DEFAULT_NICK, PVP_NICK_MAX);
   }
   state_ = PVP_STATE_IDLE;
   clearSession();
@@ -52,6 +52,9 @@ void PvpSession::clearSession() {
   localReadySet_ = false;
   peerReadyGot_ = false;
   peerReady_ = PvpReadyPayload();
+  memset(peerNick_, 0, sizeof(peerNick_));
+  peerLevel_ = 0;
+  lastKeepaliveMs_ = 0;
   round_ = 0;
   nextActionGot_ = false;
   nextAction_ = 0;
@@ -65,7 +68,7 @@ bool PvpSession::inSession() const {
 }
 
 bool PvpSession::fromPeer(const PvpMessage &m, const uint8_t *mac) const {
-  return inSession() && m.session == sessionId_ && macEqual(mac, peerMac_);
+  return inSession() && m.session == sessionId_ && pvpMacEqual(mac, peerMac_);
 }
 
 void PvpSession::queueUnicast(const uint8_t *mac, const uint8_t *data, uint8_t len) {
@@ -129,7 +132,6 @@ void PvpSession::sendHello(bool broadcast, uint32_t nowMs) {
   hello.deviceId = localId_;
   memcpy(hello.nick, nick_, PVP_NICK_BUF);
   hello.trainerLevel = trainerLevel_;
-  hello.busy = broadcast ? 0 : 1;
   hello.session = broadcast ? 0 : sessionId_;
   hello.seq = 0;
   uint8_t buf[PVP_MAX_PACKET];
@@ -155,6 +157,10 @@ PvpPeerInfo PvpSession::peerInfo() const {
   if (known) out = *known;
   out.deviceId = peerId_;
   memcpy(out.mac, peerMac_, 6);
+  if (peerNick_[0] != '\0') {  // nick announced in CHALLENGE/ACCEPT beats the beacon entry
+    memcpy(out.nick, peerNick_, PVP_NICK_BUF);
+    out.trainerLevel = peerLevel_;
+  }
   return out;
 }
 
@@ -164,7 +170,7 @@ bool PvpSession::popEvent(PvpEvent &out) { return events_.pop(out); }
 // ------------------------------------------------------------ caller actions
 
 bool PvpSession::startDiscovery(uint32_t nowMs) {
-  if (inSession() && state_ != PVP_STATE_FINISHED) return false;
+  if (!canLeave(nowMs)) return false;
   clearSession();
   peers_.clear();
   enterState(PVP_STATE_DISCOVERY, nowMs);
@@ -172,79 +178,16 @@ bool PvpSession::startDiscovery(uint32_t nowMs) {
   return true;
 }
 
+bool PvpSession::canLeave(uint32_t nowMs) const {
+  if (state_ == PVP_STATE_FINISHED) {
+    return tx_.empty() || pvpElapsed(nowMs, stateEnterMs_, PVP_LINGER_MS);
+  }
+  return !inSession();
+}
+
 void PvpSession::stopDiscovery() {
   if (state_ != PVP_STATE_DISCOVERY) return;
   state_ = PVP_STATE_IDLE;
-}
-
-bool PvpSession::challenge(uint32_t peerId, uint32_t sessionId, uint32_t nonce, uint32_t nowMs) {
-  if (state_ != PVP_STATE_DISCOVERY || sessionId == 0 || peerId == localId_) return false;
-  const PvpPeerInfo *peer = peers_.find(peerId);
-  if (!peer || peer->busy) return false;
-  clearSession();
-  sessionId_ = sessionId;
-  peerId_ = peerId;
-  memcpy(peerMac_, peer->mac, 6);
-  localNonce_ = nonce;
-  sideA_ = localId_ < peerId_;
-  lastRxMs_ = nowMs;
-  enterState(PVP_STATE_CHALLENGING, nowMs);
-  PvpMessage msg;
-  msg.type = PVP_MSG_CHALLENGE;
-  msg.deviceId = localId_;
-  msg.nonce = localNonce_;
-  return sendReliable(msg, 0, nowMs);
-}
-
-void PvpSession::establish(uint32_t nowMs) {
-  PvpMessage msg;
-  msg.type = PVP_MSG_ACCEPT;
-  msg.deviceId = localId_;
-  msg.nonce = localNonce_;
-  enterState(PVP_STATE_HANDSHAKE, nowMs);
-  if (sendReliable(msg, 0, nowMs)) pushEvent(PVP_EVT_ACCEPTED);
-}
-
-bool PvpSession::accept(uint32_t nonce, uint32_t nowMs) {
-  if (state_ != PVP_STATE_CHALLENGED) return false;
-  localNonce_ = nonce;
-  establish(nowMs);
-  return state_ == PVP_STATE_HANDSHAKE;
-}
-
-bool PvpSession::decline(uint32_t nowMs) {
-  if (state_ != PVP_STATE_CHALLENGED) return false;
-  PvpMessage msg;
-  msg.type = PVP_MSG_DECLINE;
-  msg.session = sessionId_;
-  sendFire(msg);
-  toDiscovery(nowMs);
-  return true;
-}
-
-void PvpSession::abort(uint32_t nowMs) {
-  if (state_ == PVP_STATE_DISCOVERY) {
-    stopDiscovery();
-  } else if (inSession() && state_ != PVP_STATE_FINISHED) {
-    abortLocal(PVP_REASON_USER, nowMs);
-  }
-}
-
-void PvpSession::abortLocal(uint8_t reason, uint32_t nowMs) {
-  PvpMessage msg;
-  msg.type = PVP_MSG_ABORT;
-  msg.session = sessionId_;
-  msg.reason = reason;
-  sendFire(msg);
-  tx_.reset();
-  enterState(PVP_STATE_ABORTED, nowMs);
-  pushEvent(PVP_EVT_ABORTED, reason);
-}
-
-void PvpSession::toDiscovery(uint32_t nowMs) {
-  clearSession();
-  enterState(PVP_STATE_DISCOVERY, nowMs);
-  nextHelloMs_ = nowMs;
 }
 
 // ----------------------------------------------------------------- inputs
@@ -259,6 +202,8 @@ void PvpSession::onPacket(const uint8_t *data, size_t len, const uint8_t mac[6],
   if (r != PVP_PARSE_OK) return;
   if (state_ == PVP_STATE_IDLE || state_ == PVP_STATE_ABORTED) return;
   if (isReliable(m.type) && m.seq == 0) return;
+  bool carriesId = m.type == PVP_MSG_HELLO || m.type == PVP_MSG_CHALLENGE || m.type == PVP_MSG_ACCEPT;
+  if (carriesId && m.deviceId != pvpDeviceIdFromMac(mac)) return;  // id must match the source MAC
   if (m.type == PVP_MSG_HELLO && m.session == 0) {
     onDiscoveryHello(m, mac, nowMs);
     return;
@@ -279,71 +224,6 @@ void PvpSession::onPacket(const uint8_t *data, size_t len, const uint8_t mac[6],
   }
 }
 
-void PvpSession::onBadVersion(const PvpMessage &m, const uint8_t *mac, uint32_t nowMs) {
-  if (state_ == PVP_STATE_DISCOVERY && m.type == PVP_MSG_CHALLENGE) {
-    PvpEvent e;
-    e.type = PVP_EVT_VERSION_MISMATCH;
-    memcpy(e.peer.mac, mac, 6);
-    events_.push(e);
-    PvpMessage abortMsg;
-    abortMsg.type = PVP_MSG_ABORT;
-    abortMsg.session = m.session;
-    abortMsg.reason = PVP_REASON_VERSION;
-    sendUnreliable(abortMsg, mac);
-  } else if (state_ == PVP_STATE_CHALLENGING && fromPeer(m, mac)) {
-    pushEvent(PVP_EVT_VERSION_MISMATCH);
-    tx_.reset();
-    enterState(PVP_STATE_ABORTED, nowMs);
-    pushEvent(PVP_EVT_ABORTED, PVP_REASON_VERSION);
-  }
-}
-
-void PvpSession::onDiscoveryHello(const PvpMessage &m, const uint8_t *mac, uint32_t nowMs) {
-  if (state_ != PVP_STATE_DISCOVERY || m.deviceId == localId_) return;
-  PvpPeerTable::UpdateResult res = peers_.update(m, mac, nowMs);
-  if (res != PvpPeerTable::ADDED) return;
-  PvpEvent e;
-  e.type = PVP_EVT_PEER_FOUND;
-  e.peer = *peers_.find(m.deviceId);
-  events_.push(e);
-}
-
-void PvpSession::adoptChallenge(const PvpMessage &m, const uint8_t *mac, uint32_t nowMs) {
-  uint32_t keepNonce = localNonce_;
-  clearSession();
-  localNonce_ = keepNonce;
-  sessionId_ = m.session;
-  peerId_ = m.deviceId;
-  memcpy(peerMac_, mac, 6);
-  peerNonce_ = m.nonce;
-  sideA_ = localId_ < peerId_;
-  lastRxMs_ = nowMs;
-  rxWin_.mark(m.seq);
-  sendAck(m.seq);
-}
-
-void PvpSession::onNewChallenge(const PvpMessage &m, const uint8_t *mac, uint32_t nowMs) {
-  if (m.deviceId == localId_ || m.session == 0 || state_ == PVP_STATE_FINISHED) return;
-  if (state_ == PVP_STATE_DISCOVERY) {
-    adoptChallenge(m, mac, nowMs);
-    enterState(PVP_STATE_CHALLENGED, nowMs);
-    pushEvent(PVP_EVT_CHALLENGE_RECEIVED);
-    return;
-  }
-  bool simultaneous = state_ == PVP_STATE_CHALLENGING && m.deviceId == peerId_ &&
-                      macEqual(mac, peerMac_);
-  if (simultaneous) {
-    if (sideA_) return;  // lower id wins: the peer will accept our challenge
-    adoptChallenge(m, mac, nowMs);
-    establish(nowMs);    // side B drops its own challenge and accepts A's
-    return;
-  }
-  PvpMessage busy;
-  busy.type = PVP_MSG_DECLINE;
-  busy.session = m.session;
-  sendUnreliable(busy, mac);
-}
-
 bool PvpSession::dispatch(const PvpMessage &m, uint32_t nowMs) {
   switch (m.type) {
     case PVP_MSG_ACK: tx_.ack(m.ackSeq); return false;
@@ -353,32 +233,9 @@ bool PvpSession::dispatch(const PvpMessage &m, uint32_t nowMs) {
     case PVP_MSG_ACTION: return onPeerAction(m, nowMs);
     case PVP_MSG_ROUND_HASH: return onPeerHash(m, nowMs);
     case PVP_MSG_ABORT: onRemoteAbort(m, nowMs); return false;
-    default: return false;  // HELLO keepalive, BYE: liveness only
+    case PVP_MSG_BYE: onBye(nowMs); return false;
+    default: return false;  // HELLO keepalive: liveness only
   }
-}
-
-bool PvpSession::onAccept(const PvpMessage &m, uint32_t nowMs) {
-  if (state_ != PVP_STATE_CHALLENGING || m.deviceId != peerId_) return false;
-  peerNonce_ = m.nonce;
-  tx_.drop(PVP_MSG_CHALLENGE, false, 0);
-  enterState(PVP_STATE_HANDSHAKE, nowMs);
-  pushEvent(PVP_EVT_ACCEPTED);
-  return true;
-}
-
-void PvpSession::onDecline(uint32_t nowMs) {
-  if (state_ != PVP_STATE_CHALLENGING) return;
-  pushEvent(PVP_EVT_DECLINED);
-  toDiscovery(nowMs);
-}
-
-void PvpSession::onRemoteAbort(const PvpMessage &m, uint32_t nowMs) {
-  if (state_ == PVP_STATE_FINISHED) return;
-  if (m.reason == PVP_REASON_DESYNC) pushEvent(PVP_EVT_DESYNC);
-  if (m.reason == PVP_REASON_VERSION) pushEvent(PVP_EVT_VERSION_MISMATCH);
-  tx_.reset();
-  enterState(PVP_STATE_ABORTED, nowMs);
-  pushEvent(PVP_EVT_ABORTED, m.reason);
 }
 
 // ------------------------------------------------------------------- tick
@@ -391,37 +248,43 @@ void PvpSession::tick(uint32_t nowMs) {
     case PVP_STATE_HANDSHAKE:
     case PVP_STATE_READY_EXCHANGE:
     case PVP_STATE_BATTLE: tickLive(nowMs); break;
-    case PVP_STATE_FINISHED: tx_.tick(nowMs, &PvpSession::sendCallback, this); break;
+    case PVP_STATE_FINISHED: tickFinished(nowMs); break;
     default: break;
   }
 }
 
-void PvpSession::tickDiscovery(uint32_t nowMs) {
-  PvpEvent e;
-  e.type = PVP_EVT_PEER_LOST;
-  while (peers_.popExpired(nowMs, e.peer)) events_.push(e);
-  if ((int32_t)(nowMs - nextHelloMs_) >= 0) {
-    sendHello(true, nowMs);
-    nextHelloMs_ = nowMs + PVP_HELLO_INTERVAL_MS;
-  }
-}
-
-void PvpSession::tickChallenge(uint32_t nowMs) {
-  if ((uint32_t)(nowMs - stateEnterMs_) >= PVP_CHALLENGE_TIMEOUT_MS) {
-    abortLocal(PVP_REASON_TIMEOUT, nowMs);
-    return;
-  }
-  tx_.tick(nowMs, &PvpSession::sendCallback, this);
-}
-
 void PvpSession::tickLive(uint32_t nowMs) {
-  bool silent = (uint32_t)(nowMs - lastRxMs_) >= PVP_PEER_TIMEOUT_MS;
-  bool stalled = (uint32_t)(nowMs - progressMs_) >= PVP_STALL_MS;
+  bool silent = pvpElapsed(nowMs, lastRxMs_, PVP_PEER_TIMEOUT_MS);
+  bool stalled = pvpElapsed(nowMs, progressMs_, PVP_STALL_MS);
   if (silent || stalled) {
     abortLocal(PVP_REASON_TIMEOUT, nowMs);
     return;
   }
-  if ((uint32_t)(nowMs - lastKeepaliveMs_) >= PVP_KEEPALIVE_MS) sendHello(false, nowMs);
+  if (pvpElapsed(nowMs, lastKeepaliveMs_, PVP_KEEPALIVE_MS)) sendHello(false, nowMs);
   tickBattle(nowMs);
   tx_.tick(nowMs, &PvpSession::sendCallback, this);
+}
+
+void PvpSession::tickFinished(uint32_t nowMs) {
+  if (pvpElapsed(nowMs, stateEnterMs_, PVP_LINGER_MS)) {
+    tx_.reset();  // the peer is gone or already done: stop retransmitting
+    return;
+  }
+  tx_.tick(nowMs, &PvpSession::sendCallback, this);
+}
+
+// BYE means "I am finished". If our final hash is already out and we are only
+// waiting for the peer's, the peer has verified it: finish too, so both sides
+// agree on the outcome even when the peer's final hash was lost.
+void PvpSession::onBye(uint32_t nowMs) {
+  if (state_ == PVP_STATE_FINISHED) {
+    tx_.reset();
+    return;
+  }
+  bool waitingForFinalHash = state_ == PVP_STATE_BATTLE && phase_ == PVP_PHASE_WAIT_HASH &&
+                             localHashSet_ && localFinal_;
+  if (!waitingForFinalHash) return;
+  tx_.reset();  // a peer that finished has everything we sent
+  enterState(PVP_STATE_FINISHED, nowMs);
+  pushEvent(PVP_EVT_FINISHED);
 }

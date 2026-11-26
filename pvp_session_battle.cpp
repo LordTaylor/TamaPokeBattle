@@ -174,7 +174,7 @@ void PvpSession::tryConfirm(uint32_t nowMs) {
 void PvpSession::tickBattle(uint32_t nowMs) {
   bool overdue = state_ == PVP_STATE_BATTLE && phase_ == PVP_PHASE_WAIT_ACTIONS &&
                  !localActionSet_ && !actionTimeoutSent_ &&
-                 (uint32_t)(nowMs - roundStartMs_) >= PVP_ACTION_TIMEOUT_MS;
+                 pvpElapsed(nowMs, roundStartMs_, PVP_ACTION_TIMEOUT_MS);
   if (!overdue) return;
   actionTimeoutSent_ = true;
   pushEvent(PVP_EVT_ACTION_TIMEOUT);

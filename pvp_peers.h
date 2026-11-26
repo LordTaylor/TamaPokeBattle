@@ -8,7 +8,7 @@
 // Discovered peers (max PVP_MAX_PEERS), expiring after PVP_PEER_EXPIRE_MS without HELLO.
 class PvpPeerTable {
  public:
-  enum UpdateResult : uint8_t { ADDED, UPDATED, FULL };
+  enum UpdateResult : uint8_t { ADDED, UPDATED, FULL, REJECTED };  // REJECTED: id seen with another MAC
 
   void clear() { count_ = 0; }
   uint8_t count() const { return count_; }

@@ -26,9 +26,8 @@ enum PvpReason : uint8_t {
   PVP_REASON_TIMEOUT = 3,
   PVP_REASON_DESYNC = 4,
   PVP_REASON_PROTOCOL = 5,
-  PVP_REASON_BUSY = 6,
 };
-constexpr uint8_t PVP_REASON_MAX = PVP_REASON_BUSY;
+constexpr uint8_t PVP_REASON_MAX = PVP_REASON_PROTOCOL;
 
 enum PvpParseResult : uint8_t {
   PVP_PARSE_OK = 0,
@@ -61,10 +60,9 @@ struct PvpMessage {
   uint16_t seq = 0;
   uint32_t deviceId = 0;           // HELLO, CHALLENGE, ACCEPT
   uint32_t nonce = 0;              // CHALLENGE, ACCEPT
-  char nick[PVP_NICK_BUF] = {0};   // HELLO
-  uint8_t trainerLevel = 0;        // HELLO
+  char nick[PVP_NICK_BUF] = {0};   // HELLO, CHALLENGE, ACCEPT
+  uint8_t trainerLevel = 0;        // HELLO, CHALLENGE, ACCEPT
   uint8_t version = PVP_PROTO_VERSION;  // HELLO
-  uint8_t busy = 0;                // HELLO
   PvpReadyPayload ready;           // READY
   uint16_t round = 0;              // ACTION, ROUND_HASH
   uint8_t action = 0;              // ACTION
@@ -78,6 +76,10 @@ uint16_t pvpCrc16(const uint8_t *data, size_t len);  // CRC-16/CCITT-FALSE
 
 // Payload size for a type, or -1 if the type is unknown.
 int pvpPayloadSize(uint8_t type);
+
+// deviceId is derived from the sender MAC (last four bytes, big-endian); receivers
+// reject HELLO/CHALLENGE/ACCEPT whose deviceId does not match the source MAC.
+uint32_t pvpDeviceIdFromMac(const uint8_t mac[6]);
 
 bool pvpValidNick(const char nick[PVP_NICK_BUF]);
 bool pvpValidReady(const PvpReadyPayload &ready);

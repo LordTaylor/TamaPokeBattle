@@ -13,10 +13,11 @@ constexpr uint8_t PVP_MAX_PACKET = 48;      // our largest packet (header + payl
 
 constexpr uint8_t PVP_NICK_MAX = 10;        // characters, without NUL
 constexpr uint8_t PVP_NICK_BUF = PVP_NICK_MAX + 1;
+constexpr char PVP_DEFAULT_NICK[] = "PLAYER";  // used when the local nick is invalid
 
 // Fixed payload sizes per message type.
-constexpr uint8_t PVP_LEN_HELLO = 4 + PVP_NICK_BUF + 3;  // id, nick, level, version, busy
-constexpr uint8_t PVP_LEN_CHALLENGE = 8;                 // deviceId, nonce (also ACCEPT)
+constexpr uint8_t PVP_LEN_HELLO = 4 + PVP_NICK_BUF + 2;  // id, nick, trainer level, version
+constexpr uint8_t PVP_LEN_CHALLENGE = 8 + PVP_NICK_BUF + 1;  // id, nonce, nick, trainer level (also ACCEPT)
 constexpr uint8_t PVP_LEN_DECLINE = 0;
 constexpr uint8_t PVP_LEN_READY = 14;
 constexpr uint8_t PVP_LEN_ACTION = 3;                    // round u16, action u8
@@ -30,8 +31,11 @@ constexpr uint16_t PVP_DEX_MIN = 1;
 constexpr uint16_t PVP_DEX_MAX = 386;       // DEX_COUNT in dex.h
 constexpr uint8_t PVP_LEVEL_MIN = 1;
 constexpr uint8_t PVP_LEVEL_MAX = 100;
-constexpr uint16_t PVP_STAT_MIN = 1;
-constexpr uint16_t PVP_STAT_MAX = 999;      // hp/atk/def/spe; game values stay well below
+constexpr uint16_t PVP_STAT_MIN = 1;        // atk/def/spe
+constexpr uint16_t PVP_STAT_MAX = 999;      // atk/def/spe; game maximum is about 453
+// HP may be 0 on the wire: "receiver derives it" (battle engine hpFor/turnHpFor).
+// Game maximum of the derived turn HP is 983 (30 + 5 * level + def), hence 1500.
+constexpr uint16_t PVP_HP_MAX = 1500;
 constexpr uint8_t PVP_TYPE_MAX = 18;        // TYPE_FAIRY in dex.h (0 = none)
 constexpr uint8_t PVP_ACTION_COUNT = 5;     // BattleAction 0..4
 constexpr uint8_t PVP_DEFAULT_ACTION = 0;   // BATTLE_ATTACK
@@ -47,6 +51,8 @@ constexpr uint32_t PVP_ACTION_TIMEOUT_MS = 20000;
 constexpr uint32_t PVP_KEEPALIVE_MS = 2000;
 constexpr uint32_t PVP_CHALLENGE_TIMEOUT_MS = 30000;  // human decision window
 constexpr uint32_t PVP_STALL_MS = 60000;              // no state progress at all
+constexpr uint32_t PVP_LINGER_MS = PVP_PEER_TIMEOUT_MS;  // FINISHED keeps retransmitting this long
+constexpr uint32_t PVP_REPLY_MIN_INTERVAL_MS = 250;   // rate limit for unsolicited DECLINE/VERSION replies
 
 // --- Capacities (static buffers, no heap) ---
 constexpr uint8_t PVP_MAX_PEERS = 8;

@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "pvp_time.h"
+
 const PvpPeerInfo *PvpPeerTable::find(uint32_t deviceId) const {
   for (uint8_t i = 0; i < count_; i++) {
     if (peers_[i].deviceId == deviceId) return &peers_[i];
@@ -16,6 +18,7 @@ PvpPeerTable::UpdateResult PvpPeerTable::update(const PvpMessage &hello, const u
   for (uint8_t i = 0; i < count_; i++) {
     if (peers_[i].deviceId == hello.deviceId) slot = &peers_[i];
   }
+  if (slot && !pvpMacEqual(slot->mac, mac)) return REJECTED;  // never let an id move to another MAC
   if (!slot) {
     if (count_ >= PVP_MAX_PEERS) return FULL;
     slot = &peers_[count_++];
@@ -26,14 +29,13 @@ PvpPeerTable::UpdateResult PvpPeerTable::update(const PvpMessage &hello, const u
   memcpy(slot->nick, hello.nick, PVP_NICK_BUF);
   slot->trainerLevel = hello.trainerLevel;
   slot->version = hello.version;
-  slot->busy = hello.busy;
   slot->lastSeenMs = nowMs;
   return result;
 }
 
 bool PvpPeerTable::popExpired(uint32_t nowMs, PvpPeerInfo &out) {
   for (uint8_t i = 0; i < count_; i++) {
-    if ((uint32_t)(nowMs - peers_[i].lastSeenMs) < PVP_PEER_EXPIRE_MS) continue;
+    if (!pvpElapsed(nowMs, peers_[i].lastSeenMs, PVP_PEER_EXPIRE_MS)) continue;
     out = peers_[i];
     peers_[i] = peers_[count_ - 1];
     count_--;

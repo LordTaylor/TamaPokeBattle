@@ -55,7 +55,9 @@ void readReady(const uint8_t *p, PvpReadyPayload &r) {
 
 bool validMessage(const PvpMessage &m) {
   switch (m.type) {
-    case PVP_MSG_HELLO: return pvpValidNick(m.nick) && m.busy <= 1;
+    case PVP_MSG_HELLO:
+    case PVP_MSG_CHALLENGE:
+    case PVP_MSG_ACCEPT: return pvpValidNick(m.nick);
     case PVP_MSG_READY: return pvpValidReady(m.ready);
     case PVP_MSG_ACTION: return m.action < PVP_ACTION_COUNT;
     case PVP_MSG_ROUND_HASH: return m.finalRound <= 1;
@@ -71,12 +73,13 @@ void writePayload(const PvpMessage &m, uint8_t *p) {
       memcpy(p + 4, m.nick, PVP_NICK_BUF);
       p[4 + PVP_NICK_BUF] = m.trainerLevel;
       p[5 + PVP_NICK_BUF] = m.version;
-      p[6 + PVP_NICK_BUF] = m.busy;
       break;
     case PVP_MSG_CHALLENGE:
     case PVP_MSG_ACCEPT:
       put32(p, m.deviceId);
       put32(p + 4, m.nonce);
+      memcpy(p + 8, m.nick, PVP_NICK_BUF);
+      p[8 + PVP_NICK_BUF] = m.trainerLevel;
       break;
     case PVP_MSG_READY: writeReady(p, m.ready); break;
     case PVP_MSG_ACTION:
@@ -101,12 +104,13 @@ void readPayload(const uint8_t *p, PvpMessage &m) {
       memcpy(m.nick, p + 4, PVP_NICK_BUF);
       m.trainerLevel = p[4 + PVP_NICK_BUF];
       m.version = p[5 + PVP_NICK_BUF];
-      m.busy = p[6 + PVP_NICK_BUF];
       break;
     case PVP_MSG_CHALLENGE:
     case PVP_MSG_ACCEPT:
       m.deviceId = get32(p);
       m.nonce = get32(p + 4);
+      memcpy(m.nick, p + 8, PVP_NICK_BUF);
+      m.trainerLevel = p[8 + PVP_NICK_BUF];
       break;
     case PVP_MSG_READY: readReady(p, m.ready); break;
     case PVP_MSG_ACTION:
@@ -161,6 +165,10 @@ int pvpPayloadSize(uint8_t type) {
   }
 }
 
+uint32_t pvpDeviceIdFromMac(const uint8_t mac[6]) {
+  return ((uint32_t)mac[2] << 24) | ((uint32_t)mac[3] << 16) | ((uint32_t)mac[4] << 8) | mac[5];
+}
+
 bool pvpValidNick(const char nick[PVP_NICK_BUF]) {
   size_t n = 0;
   while (n < PVP_NICK_BUF && nick[n] != '\0') {
@@ -179,7 +187,8 @@ bool pvpValidReady(const PvpReadyPayload &r) {
   if (r.dex < PVP_DEX_MIN || r.dex > PVP_DEX_MAX) return false;
   if (r.shiny > 1) return false;
   if (r.level < PVP_LEVEL_MIN || r.level > PVP_LEVEL_MAX) return false;
-  const uint16_t stats[4] = { r.hp, r.atk, r.def, r.spe };
+  if (r.hp > PVP_HP_MAX) return false;
+  const uint16_t stats[3] = { r.atk, r.def, r.spe };
   for (uint16_t s : stats) {
     if (s < PVP_STAT_MIN || s > PVP_STAT_MAX) return false;
   }
