@@ -487,6 +487,29 @@ void Pet::checkMedals() {
   }
 }
 
+// Zostawia tylko znaki dostepne na klawiaturze (A-Z . -) i tnie do TRAINER_NAME_MAX.
+static void sanitizeTrainer(const char *in, char *out) {
+  size_t n = 0;
+  for (; in && *in && n < TRAINER_NAME_MAX; in++) {
+    char ch = *in;
+    if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 'a' + 'A');
+    if ((ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-') out[n++] = ch;
+  }
+  out[n] = 0;
+}
+
+bool trainerNameHasLetter(const char *name) {
+  for (; name && *name; name++)
+    if ((*name >= 'A' && *name <= 'Z') || (*name >= 'a' && *name <= 'z')) return true;
+  return false;
+}
+
+void Pet::setTrainer(const char *name) {
+  sanitizeTrainer(name, trainer);
+  if (!trainerNameHasLetter(trainer)) trainer[0] = 0;  // bez litery nick nie jest wazny
+  save();
+}
+
 void Pet::rename(const char *name) {
   strncpy(nick, name, sizeof(nick) - 1);
   nick[sizeof(nick) - 1] = 0;
@@ -1633,6 +1656,7 @@ void Pet::save() {
   prefs.putUChar("edlv", evoDeclinedLv);
   prefs.putUInt("edage", evoDeclinedAge);
   prefs.putString("nick", nick);
+  prefs.putString("trainer", trainer);
 }
 
 void Pet::load() {
@@ -1748,6 +1772,10 @@ void Pet::load() {
     expeditionSite = EXP_SITE_NONE;
   }
   prefs.getString("nick", nick, sizeof(nick));
+  char rawTrainer[32] = "";
+  prefs.getString("trainer", rawTrainer, sizeof(rawTrainer));
+  sanitizeTrainer(rawTrainer, trainer);
+  if (!trainerNameHasLetter(trainer)) trainer[0] = 0;
   // siembra: la mascota actual cuenta como criada (guardados antiguos)
   if (speciesId >= 1) registerSpecies(speciesId);
   ceremony = CER_NONE;
