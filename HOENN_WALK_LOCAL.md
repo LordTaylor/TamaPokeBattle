@@ -27,7 +27,7 @@ for several weeks. The checklist below is kept as the reference procedure.
 Run `bash tools/build_web_local.sh`, serve `web` on localhost and flash using
 `/dev.html`. Leave Erase device unchecked. Sprites do not need reinstalling.
 
-- Check site names, goals and earned-bonus text in all six languages.
+- Check site names, goals and earned-bonus text in all seven languages.
 - Start a tour, walk with display on/off and check the progress.
 - Reboot during a tour and check that saved progress remains.
 - Claim a normal item and a walking bonus, then verify no second claim.

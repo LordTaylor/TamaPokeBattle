@@ -9,6 +9,7 @@
 class Preferences {
 public:
   void begin(const char *, bool) {}
+  void end() {}
   void clear() {
     values.clear();
     blobs.clear();

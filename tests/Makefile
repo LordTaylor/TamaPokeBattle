@@ -6,9 +6,10 @@ BATTLE_TEST_OBJS = build/battle_tests.o build/battle.o
 
 .PHONY: test web-test clean
 
-test: build/pet_tests build/battle_tests web-test
+test: build/pet_tests build/battle_tests build/i18n_tests web-test
 	./build/pet_tests
 	./build/battle_tests
+	./build/i18n_tests
 
 web-test:
 	node web_serial_tests.mjs
@@ -42,6 +43,17 @@ build/battle_tests.o: battle_tests.cpp ../battle.h | build
 
 build/battle.o: ../battle.cpp ../battle.h | build
 	$(CXX) $(CXXFLAGS) -c ../battle.cpp -o $@
+
+I18N_TEST_OBJS = build/i18n_tests.o build/i18n.o
+
+build/i18n_tests: $(I18N_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(I18N_TEST_OBJS) -o $@
+
+build/i18n_tests.o: i18n_tests.cpp ../i18n.h ../pet.h | build
+	$(CXX) $(CXXFLAGS) -c i18n_tests.cpp -o $@
+
+build/i18n.o: ../i18n.cpp ../i18n.h ../dex.h ../pet.h | build
+	$(CXX) $(CXXFLAGS) -c ../i18n.cpp -o $@
 
 clean:
 	rm -rf build
