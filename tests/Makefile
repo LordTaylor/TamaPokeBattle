@@ -88,3 +88,31 @@ build/pvp_%.o: ../pvp_%.cpp $(PVP_HEADERS) | build
 
 .PHONY: pvp-test
 test: pvp-test
+
+# PvP battle engine tests: own object dir (no clash with generic build/pvp_%.o rules),
+# built with UBSan so out-of-range reads and signed overflow fail the run.
+PVP_BATTLE_SANITIZE ?= -fsanitize=undefined -fno-sanitize-recover=undefined
+PVP_BATTLE_TEST_OBJS = build/pvpbat/pvp_battle_tests.o build/pvpbat/pvp_battle.o build/pvpbat/battle.o
+
+.PHONY: pvp-battle-test
+
+pvp-battle-test: build/pvp_battle_engine_tests
+	./build/pvp_battle_engine_tests
+
+build/pvpbat:
+	mkdir -p build/pvpbat
+
+build/pvp_battle_engine_tests: $(PVP_BATTLE_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_BATTLE_SANITIZE) $(PVP_BATTLE_TEST_OBJS) -o $@
+
+build/pvpbat/pvp_battle_tests.o: pvp_battle_tests.cpp ../pvp_battle.h ../pvp_config.h ../trainer.h ../battle_core.h ../battle.h | build/pvpbat
+	$(CXX) $(CXXFLAGS) $(PVP_BATTLE_SANITIZE) -c pvp_battle_tests.cpp -o $@
+
+build/pvpbat/pvp_battle.o: ../pvp_battle.cpp ../pvp_battle.h ../pvp_config.h ../battle_core.h ../battle.h | build/pvpbat
+	$(CXX) $(CXXFLAGS) $(PVP_BATTLE_SANITIZE) -c ../pvp_battle.cpp -o $@
+
+build/pvpbat/battle.o: ../battle.cpp ../battle_core.h ../battle.h | build/pvpbat
+	$(CXX) $(CXXFLAGS) $(PVP_BATTLE_SANITIZE) -c ../battle.cpp -o $@
+
+test: pvp-battle-test
+build/battle.o: ../battle_core.h

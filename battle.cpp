@@ -1,9 +1,10 @@
 #include "battle.h"
+#include "battle_core.h"
 #include "dex.h"
 
 namespace {
 constexpr uint8_t MAX_BATTLE_ROUNDS = 50;
-constexpr uint8_t MAX_TURN_ROUNDS = 20;
+constexpr uint8_t MAX_TURN_ROUNDS = battle_core::MAX_TURN_ROUNDS;
 
 uint16_t hpFor(const BattleStats &stats) {
   if (stats.hp > 0) return stats.hp;
@@ -158,14 +159,13 @@ uint16_t cappedTurnDamage(const BattleStats &attacker,
                           uint8_t luck,
                           bool counter,
                           uint8_t powerPct) {
-  uint16_t damage = damageFor(attacker, defender, luck);
-  damage = (uint16_t)((uint32_t)damage * powerPct / 100);
+  uint32_t damage = (uint32_t)damageFor(attacker, defender, luck) * powerPct / 100;
   if (damage == 0) damage = 1;
-  if (counter) damage = (uint16_t)((uint32_t)damage * 3 / 2);
-  uint16_t cap = (uint16_t)((uint32_t)defenderMaxHp * 35 / 100);
+  if (counter) damage = damage * battle_core::COUNTER_PCT / 100;
+  uint32_t cap = (uint32_t)defenderMaxHp * battle_core::TURN_CAP_PCT / 100;
   if (cap < 1) cap = 1;
   if (damage > cap) damage = cap;
-  return damage;
+  return (uint16_t)damage;
 }
 
 bool finished(const BattleRuntime &battle) {
@@ -183,17 +183,17 @@ bool isAttackAction(BattleAction action) {
 }
 
 uint8_t attackPowerPct(BattleAction action) {
-  if (action == BATTLE_ATTACK_QUICK) return 85;
-  if (action == BATTLE_ATTACK_HEAVY) return 125;
+  if (action == BATTLE_ATTACK_QUICK) return battle_core::POWER_QUICK_PCT;
+  if (action == BATTLE_ATTACK_HEAVY) return battle_core::POWER_HEAVY_PCT;
   return 100;
 }
 
 uint8_t enemyDodgeChance(const BattleRuntime &battle, BattleAction action) {
-  int chance = battle.enemy.spe > battle.player.spe ? 18 : 10;
-  if (action == BATTLE_ATTACK_QUICK) chance -= 9;
-  else if (action == BATTLE_ATTACK_HEAVY) chance += 22;
+  int chance = battle.enemy.spe > battle.player.spe ? battle_core::DODGE_FAST_TARGET_PCT : battle_core::DODGE_BASE_PCT;
+  if (action == BATTLE_ATTACK_QUICK) chance += battle_core::DODGE_QUICK_DELTA;
+  else if (action == BATTLE_ATTACK_HEAVY) chance += battle_core::DODGE_HEAVY_DELTA;
   if (chance < 0) chance = 0;
-  if (chance > 45) chance = 45;
+  if (chance > battle_core::DODGE_MAX_PCT) chance = battle_core::DODGE_MAX_PCT;
   return (uint8_t)chance;
 }
 }  // namespace
@@ -288,7 +288,7 @@ BattleRuntime beginBattleRuntime(const BattleStats &player, const BattleStats &e
   battle.enemyMaxHp = turnHpFor(enemy);
   battle.playerHp = battle.playerMaxHp;
   battle.enemyHp = battle.enemyMaxHp;
-  battle.restUsesLeft = 2;
+  battle.restUsesLeft = battle_core::REST_USES_PER_BATTLE;
   battle.counterReady = false;
   return battle;
 }
@@ -315,8 +315,8 @@ BattleTurnResult stepBattle(BattleRuntime &battle, BattleAction action, uint8_t 
   if (action == BATTLE_REST) {
     turn.playerRested = true;
     battle.restUsesLeft--;
-    uint16_t heal = (uint16_t)((uint32_t)battle.playerMaxHp * 28 / 100);
-    if (heal < 6) heal = 6;
+    uint16_t heal = (uint16_t)((uint32_t)battle.playerMaxHp * battle_core::REST_HEAL_PCT / 100);
+    if (heal < battle_core::REST_HEAL_MIN) heal = battle_core::REST_HEAL_MIN;
     uint16_t missing = battle.playerMaxHp - battle.playerHp;
     turn.playerHeal = heal > missing ? missing : heal;
     battle.playerHp += turn.playerHeal;
@@ -336,25 +336,25 @@ BattleTurnResult stepBattle(BattleRuntime &battle, BattleAction action, uint8_t 
   if (enemyActs) {
     uint16_t enemyHit = cappedTurnDamage(battle.enemy, battle.player, battle.playerMaxHp, 99 - luck, false, 100);
     if (action == BATTLE_DODGE) {
-      if (luck < 85) {
+      if (luck < battle_core::DODGE_LUCK_LIMIT) {
         turn.playerDodged = true;
         battle.counterReady = true;
         turn.counterReady = true;
         enemyHit = 0;
       } else {
-        enemyHit = enemyHit > 2 ? enemyHit / 3 : 1;
+        enemyHit = enemyHit > battle_core::FAILED_DODGE_DIVISOR - 1 ? enemyHit / battle_core::FAILED_DODGE_DIVISOR : 1;
       }
     } else if (action == BATTLE_ATTACK_QUICK) {
       turn.quickGuard = true;
-      enemyHit = (uint16_t)((uint32_t)enemyHit * 85 / 100);
+      enemyHit = (uint16_t)((uint32_t)enemyHit * battle_core::GUARD_QUICK_PCT / 100);
       if (enemyHit == 0) enemyHit = 1;
     } else if (action == BATTLE_ATTACK_HEAVY) {
       turn.heavyRisk = true;
-      enemyHit = (uint16_t)((uint32_t)enemyHit * 120 / 100);
+      enemyHit = (uint16_t)((uint32_t)enemyHit * battle_core::GUARD_HEAVY_PCT / 100);
       if (enemyHit == 0) enemyHit = 1;
     } else if (action == BATTLE_REST) {
       turn.playerGuarded = true;
-      enemyHit = (uint16_t)((uint32_t)enemyHit * 70 / 100);
+      enemyHit = (uint16_t)((uint32_t)enemyHit * battle_core::GUARD_REST_PCT / 100);
       if (enemyHit == 0) enemyHit = 1;
     }
     if (enemyHit > 0) {
@@ -407,3 +407,14 @@ BattleResult resolveBattle(const BattleStats &player,
 
   return result;
 }
+
+namespace battle_core {
+uint8_t clampLuck(uint8_t luck) { return clampedLuck(luck); }
+bool isAttackAction(BattleAction action) { return ::isAttackAction(action); }
+uint8_t attackPowerPct(BattleAction action) { return ::attackPowerPct(action); }
+uint16_t turnMaxHp(const BattleStats &stats) { return turnHpFor(stats); }
+uint16_t turnDamage(const BattleStats &attacker, const BattleStats &defender,
+                    uint16_t defenderMaxHp, uint8_t luck, bool counter, uint8_t powerPct) {
+  return cappedTurnDamage(attacker, defender, defenderMaxHp, luck, counter, powerPct);
+}
+}  // namespace battle_core
