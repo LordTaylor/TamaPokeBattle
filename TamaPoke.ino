@@ -183,6 +183,11 @@ bool battleLowHpWarned = false;
 uint32_t wildPromptUntil = 0;
 uint32_t nextWildEligible = 0;
 uint32_t lastWildCheck = 0;
+// Spotkanie co losowe STEP_ENCOUNTER_MIN..MAX krokow: licznik tylko w RAM (bez zmian w save), restart zaczyna odliczanie od nowa.
+uint16_t stepsToEncounter = 0;
+bool stepEncounterPending = false;
+#define STEP_ENCOUNTER_MIN_GAP_MS (3UL * 60UL * 1000UL)
+uint32_t lastWildEventAt = 0;
 int16_t wildPromptDex = 0;
 uint8_t wildPromptLevel = 1;
 bool wildPromptShiny = false;
@@ -532,7 +537,7 @@ void loop() {
   ensureMon();
   setPowerCacheInterval(powerSave ? 10000UL : 2000UL);
   pet.ensureDailyGoals();
-  maybeOfferWildEncounter(now);
+  if (!maybeOfferStepEncounter(now)) maybeOfferWildEncounter(now);
   maybeOfferPetEvent(now);
   maybeOfferMorning(now);
   maybePlayAmbientSound(now);
@@ -547,6 +552,7 @@ void loop() {
   // VBUS-Status kann sonst bis zu zehn Sekunden echte Schritte verwerfen.
   if (walked) {
     pet.applyWalk(walked, rtcEpoch());
+    trackStepEncounter(walked);
     if (cardOpen && cardPage == 7) cardDirty = true;
   }
   if ((pet.stepsToday != stepsBefore || pet.stepDay != stepDayBefore) &&
@@ -2813,6 +2819,7 @@ BattleStats petBattleStats() {
 }
 
 void scheduleNextWild(uint32_t now) {
+  lastWildEventAt = now ? now : 1;
   nextWildEligible = now + WILD_COOLDOWN_MS;
 }
 
@@ -2821,6 +2828,33 @@ bool mainScreenReadyForWild() {
   if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || kbOpen || clockOpen || helpOpen) return false;
   if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || petEventUntil) return false;
   if (pet.evolving() || pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton()) return false;
+  return true;
+}
+
+void offerWildPrompt(uint32_t now, int16_t cand) {
+  wildPromptDex = cand;
+  wildPromptLevel = wildLevelFor(pet.level(), (uint8_t)random(100));
+  wildPromptShiny = (random(4096) < pet.stepShinyChancePer4096());
+  wildPromptUntil = now + WILD_PROMPT_MS;
+  scheduleNextWild(now);
+  sfxPlay(SFX_MENU);
+}
+
+// Zalicza kroki do licznika spotkania; po osiagnieciu celu czeka na wolny ekran glowny.
+void trackStepEncounter(uint16_t walked) {
+  if (!walked || stepEncounterPending) return;
+  if (pet.isEgg() || pet.sleeping || pet.awaitingStarter()) return;
+  if (stepsToEncounter == 0) stepsToEncounter = stepEncounterGoal((uint8_t)random(100));
+  if (stepEncounterAdvance(stepsToEncounter, walked)) stepEncounterPending = true;
+}
+
+bool maybeOfferStepEncounter(uint32_t now) {
+  if (!stepEncounterPending || wildPromptUntil) return false;
+  if (lastWildEventAt && now - lastWildEventAt < STEP_ENCOUNTER_MIN_GAP_MS) return false;
+  if (!mainScreenReadyForWild()) return false;
+  stepEncounterPending = false;
+  stepsToEncounter = stepEncounterGoal((uint8_t)random(100));
+  offerWildPrompt(now, pickWildSpecies((uint8_t)random(100), currentDayPhase()));
   return true;
 }
 
@@ -2844,12 +2878,7 @@ void maybeOfferWildEncounter(uint32_t now) {
   }
   if ((uint8_t)random(100) >= chance) return;
 
-  wildPromptDex = cand;
-  wildPromptLevel = wildLevelFor(pet.level(), (uint8_t)random(100));
-  wildPromptShiny = (random(4096) < pet.stepShinyChancePer4096());
-  wildPromptUntil = now + WILD_PROMPT_MS;
-  scheduleNextWild(now);
-  sfxPlay(SFX_MENU);
+  offerWildPrompt(now, cand);
 }
 
 void scheduleNextPetEvent(uint32_t now) {
