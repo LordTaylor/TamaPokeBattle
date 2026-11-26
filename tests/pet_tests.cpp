@@ -1,3 +1,4 @@
+#include <cstring>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -1209,7 +1210,32 @@ static void testExpeditionWalkingBonus() {
   EXPECT_EQ(blocked.claimExpedition(1900),EXP_ITEM_NONE);
 }
 
+static void testTrainerNameIsSanitizedPersistedAndOutsideBackup() {
+  Pet p;
+  p.begin();  // zaklada save w NVS (stub), potem zapis/odczyt dziala jak na sprzecie
+  EXPECT_TRUE(!p.hasTrainer());
+  p.setTrainer("ash ketchum xyz");  // male litery, spacja, limit 10
+  EXPECT_TRUE(std::strcmp(p.trainer, "ASHKETCHUM") == 0);
+  p.setTrainer("1234 !@#");  // same niedozwolone znaki: nick pusty
+  EXPECT_TRUE(!p.hasTrainer());
+  p.setTrainer("-.-");  // bez litery: nick niewazny
+  EXPECT_TRUE(!p.hasTrainer());
+  EXPECT_TRUE(trainerNameHasLetter("a-") && !trainerNameHasLetter("-.") && !trainerNameHasLetter(""));
+  p.setTrainer("RED.-1");
+  EXPECT_TRUE(std::strcmp(p.trainer, "RED.-") == 0);
+  p.trainer[0] = 0;  // prefs to pole instancji: wczytujemy z tego samego NVS
+  p.begin();
+  EXPECT_TRUE(std::strcmp(p.trainer, "RED.-") == 0);
+  // import kopii zapasowej nie rusza nicku trenera (poza struktura backupu)
+  Pet other;
+  uint8_t blob[Pet::BACKUP_MAX_BYTES] = {};
+  size_t size = other.exportBackup(blob, sizeof(blob));
+  EXPECT_TRUE(p.importBackup(blob, size));
+  EXPECT_TRUE(std::strcmp(p.trainer, "RED.-") == 0);
+}
+
 int main() {
+  testTrainerNameIsSanitizedPersistedAndOutsideBackup();
   testExpeditionWalkingBonus();
   testEggHatchesChosenStarter();
   testBattleStatsUseBaseGenesLevelAndTraining();

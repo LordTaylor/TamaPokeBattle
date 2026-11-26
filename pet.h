@@ -109,6 +109,11 @@ struct BattleReward {
   uint8_t amount = 0;
 };
 
+#define TRAINER_NAME_MAX 10  // znaki nicku trenera (bez NUL)
+
+// Nick jest poprawny, gdy zawiera co najmniej jedna litere A-Z (nie same '.' i '-').
+bool trainerNameHasLetter(const char *name);
+
 class Pet {
 public:
   // Estadisticas 0..100
@@ -140,6 +145,7 @@ public:
   // vinculo (del bicho: sube lento con cuidado, se resetea al nacer otro)
   uint8_t bond = 0;
   char nick[12] = "";    // apodo (vacio = nombre de especie)
+  char trainer[TRAINER_NAME_MAX + 1] = "";  // nick entrenador (PvP); vacio = aun no elegido; fuera del backup
   // medallas: del individuo + contador acumulado entre todas las crianzas
   uint16_t medals = 0, totalMedals = 0;
   uint16_t newMedal = 0;   // recien conseguida(s), para celebrar
@@ -329,6 +335,8 @@ public:
 
   // racha / vinculo / medallas / nombre
   void rename(const char *name);
+  void setTrainer(const char *name);
+  bool hasTrainer() const { return trainer[0] != 0; }
   bool hasMedal(uint16_t m) const { return medals & m; }
   bool showMedal() const { return deadlineActive(millis(), medalUntil); }
   bool showMilestone() const { return deadlineActive(millis(), milestoneUntil); }

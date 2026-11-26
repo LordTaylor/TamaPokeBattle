@@ -88,6 +88,7 @@ bool cardOpen = false;        // ficha del bicho (deslizar vertical)
 bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
+uint8_t kbTarget = 0;  // 0 = imie stworka, 1 = nick trenera (PvP)
 #define CARD_COUNT 9
 uint8_t cardPage = 0;         // 0 perfil ... 7 expedicion, 8 pasos/trail
 uint8_t boxPage = 0;
@@ -329,12 +330,12 @@ void lockTouchBrief(uint16_t ms = 160) {
 }
 
 const char *screenName() {
+  if (kbOpen) return "keyboard";
   if (pet.awaitingStarter()) return "starter";
   if (galleryOpen) return galleryDetail ? "gallery-detail" : "gallery-grid";
   if (gameOpen) return "game";
   if (sackOpen) return "sack";
   if (battleOpen) return battleResolved ? "battle-result" : "battle";
-  if (kbOpen) return "keyboard";
   if (helpOpen) return "help";
   if (clockOpen) return "settings";
   if (cardOpen) return "card";
@@ -344,10 +345,10 @@ const char *screenName() {
 
 bool staticScreenClean() {
   if (watermarkNeedsRedraw()) return false;
+  if (kbOpen) return !keyboardDirty;
   if (pet.awaitingStarter()) return !starterDirty;
   if (galleryOpen && !galleryDetail) return !galleryDirty;
   if (battleOpen && battleResolved) return !battleDirty;
-  if (kbOpen) return !keyboardDirty;
   if (helpOpen) return !helpDirty;
   if (clockOpen) return !clockDirty;
   if (cardOpen) return !cardDirty;
@@ -480,7 +481,7 @@ bool lightSleepAllowed(uint32_t now) {
   if (gameOpen || sackOpen || battleOpen || bathUntil) return false;
   if (pet.awaitingStarter() || feedMenuUntil || confirmUntil || choiceKind || wildPromptUntil || petEventUntil) return false;
   if (pet.evolving() || pet.ceremony || pet.eating() || pet.showHeart()) return false;
-  if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return false;
+  if (galleryOpen || cardOpen || (kbOpen && !screenOff) || clockOpen || helpOpen || gameMenuOpen) return false;  // zgaszony ekran z otwarta klawiatura (nick) tez spi
   return true;
 }
 
@@ -532,6 +533,7 @@ void loop() {
   if (runReady && !wasRunReady) sfxPlay(SFX_DENY);
   wasRunReady = runReady;
 
+  maybeAskTrainerName();
   handleTouch();
   handleSerial();
   ensureMon();
@@ -1195,6 +1197,10 @@ void startGameMenuChoice(uint8_t idx) {
 
 void onTap(int16_t x, int16_t y) {
   // Serial.printf("TOUCH %d %d\n", x, y);  // diagnostico (silenciado: satura el log)
+  if (kbOpen) {  // klawiatura (rowniez nick trenera przy starcie) ma pierwszenstwo
+    keyboardTap(x, y);
+    return;
+  }
   if (pet.awaitingStarter()) {  // primera partida: region y despues inicial
     if (starterRegion == 0xFF) {
       for (uint8_t i = 0; i < 3; i++) {
@@ -1226,10 +1232,6 @@ void onTap(int16_t x, int16_t y) {
     galleryTap(x, y);
     return;
   }
-  if (kbOpen) {
-    keyboardTap(x, y);
-    return;
-  }
   if (helpOpen) {
     helpTap(x, y);
     return;
@@ -1243,7 +1245,7 @@ void onTap(int16_t x, int16_t y) {
     if (cardPage == 0 && inProfilePetPortrait(x, y)) {
       speciesChirpPlay(pet.speciesId, true);
     }
-    else if (cardPage == 0 && y < 84) openKeyboard();  // tocar el nombre = renombrar
+    else if (cardPage == 0 && y < 84) openKeyboard(0);  // tocar el nombre = renombrar
     else if (cardPage == 0 && y >= 366 && y <= 398) {
       uint8_t count = pet.unlockedCollectionFrameCount();
       uint8_t next = pet.collectionFrame;
@@ -1711,6 +1713,10 @@ void render() {
     galleryDirty = true;
   }
   if (staticScreenClean()) { perfRenderSkipCount++; return; }
+  if (kbOpen) {
+    renderKeyboard();
+    return;
+  }
   if (pet.awaitingStarter()) {  // primera partida: region y starter (prioridad total)
     if (starterRegion == 0xFF) renderStarterRegionSelect();
     else renderStarterSelect();
@@ -1730,10 +1736,6 @@ void render() {
   }
   if (battleOpen) {
     renderBattle();
-    return;
-  }
-  if (kbOpen) {
-    renderKeyboard();
     return;
   }
   if (helpOpen) {
@@ -2829,6 +2831,15 @@ bool mainScreenReadyForWild() {
   if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || petEventUntil) return false;
   if (pet.evolving() || pet.wantEvolveButton() || pet.canRunawayNow() || pet.wantFarewellButton()) return false;
   return true;
+}
+
+// Pierwsze uruchomienie (takze po aktualizacji starego save'a): obowiazkowy nick trenera.
+void maybeAskTrainerName() {
+  if (pet.hasTrainer() || kbOpen || screenOff) return;
+  if (battleOpen || gameOpen || gameMenuOpen || sackOpen || cardOpen || galleryOpen || clockOpen || helpOpen) return;
+  if (feedMenuUntil || confirmUntil || choiceKind || bathUntil || wildPromptUntil || petEventUntil) return;
+  if (pet.evolving() || pet.ceremony) return;
+  openKeyboard(1);
 }
 
 void offerWildPrompt(uint32_t now, int16_t cand) {
@@ -4970,11 +4981,12 @@ static const char KB_KEYS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-";  // 28 + DEL + OK 
 #define KB_W 64
 #define KB_H 52
 
-void openKeyboard() {
+void openKeyboard(uint8_t target) {
   kbOpen = true;
+  kbTarget = target;
   keyboardDirty = true;
   lockTouchBrief();
-  strncpy(nameBuf, pet.nick, sizeof(nameBuf) - 1);
+  strncpy(nameBuf, target ? pet.trainer : pet.nick, sizeof(nameBuf) - 1);
   nameBuf[sizeof(nameBuf) - 1] = 0;
   nameLen = strlen(nameBuf);
   sfxPlay(SFX_MENU);
@@ -4985,8 +4997,9 @@ void renderKeyboard() {
   gfx->fillScreen(UI_BG_DAY);
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_NAME)) * 6, 56);
-  gfx->print(T(S_NAME));
+  const char *kbTitle = kbTarget ? T(S_TRAINER_NAME) : T(S_NAME);
+  gfx->setCursor(CX - strlen(kbTitle) * 6, 56);
+  gfx->print(kbTitle);
   // buffer actual
   gfx->fillRoundRect(83, 84, 300, 40, 8, UI_WHITE);
   gfx->drawRoundRect(83, 84, 300, 40, 8, UI_INK);
@@ -5018,19 +5031,33 @@ void keyboardTap(int16_t x, int16_t y) {
   if (col < 0 || col >= KB_COLS || row < 0 || row >= 5) return;
   int i = row * KB_COLS + col;
   if (i >= 30) return;
-  sfxPlay(SFX_TAP);
   if (i == 28) {  // borrar
+    sfxPlay(SFX_TAP);
     if (nameLen) nameBuf[--nameLen] = 0;
     keyboardDirty = true;
   } else if (i == 29) {  // OK
-    pet.rename(nameBuf);
+    if (kbTarget) {
+      if (!trainerNameHasLetter(nameBuf)) {  // nick trenera obowiazkowy: min. 1 litera
+        sfxPlay(SFX_DENY);
+        return;
+      }
+      sfxPlay(SFX_TAP);
+      pet.setTrainer(nameBuf);
+    } else {
+      sfxPlay(SFX_TAP);
+      pet.rename(nameBuf);
+    }
     kbOpen = false;
     cardDirty = true;
+    markUiDirty();
     lockTouchBrief();
-  } else if (nameLen < sizeof(nameBuf) - 1) {
+  } else if (nameLen < (kbTarget ? TRAINER_NAME_MAX : sizeof(nameBuf) - 1)) {
+    sfxPlay(SFX_TAP);
     nameBuf[nameLen++] = KB_KEYS[i];
     nameBuf[nameLen] = 0;
     keyboardDirty = true;
+  } else {
+    sfxPlay(SFX_DENY);  // limit znakow
   }
 }
 
