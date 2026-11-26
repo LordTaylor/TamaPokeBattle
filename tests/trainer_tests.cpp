@@ -204,7 +204,23 @@ static void testSanitizeHistoryDropsGarbage() {
   EXPECT_EQ(h[0].oppLevel, TRAINER_LEVEL_MAX);
 }
 
+static void testQuitPenalty() {
+  TrainerStats s;
+  s.level = 5; s.progress = 0; s.wins = 2; s.matchSeq = 7;
+  EXPECT_TRUE(!trainerApplyQuitPenalty(s));           // clamp na 0
+  EXPECT_EQ(s.progress, 0); EXPECT_EQ(s.level, 5);
+  s.progress = 3;
+  EXPECT_TRUE(trainerApplyQuitPenalty(s));
+  EXPECT_EQ(s.progress, 3 - PVP_QUIT_PENALTY);
+  EXPECT_EQ(s.level, 5);                              // poziom nie spada
+  EXPECT_EQ(s.wins, 2); EXPECT_EQ(s.matchSeq, 7u);    // bez W/L/D
+  s.level = TRAINER_LEVEL_MAX; s.progress = 0;
+  EXPECT_TRUE(!trainerApplyQuitPenalty(s));
+  EXPECT_EQ(s.level, TRAINER_LEVEL_MAX);
+}
+
 int main() {
+  testQuitPenalty();
   testLevelCostTable();
   testPointsTable();
   testMultiLevelUpKeepsRemainder();

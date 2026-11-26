@@ -18,3 +18,22 @@ Bloby to zrzut struktur bez wersji: zmiana layoutu `FarmGuard` / `PvpHistoryEntr
 - `oppNick` przekazuj z jawna dlugoscia (`oppNickLen`), bufor z pakietu nie musi miec terminatora; `oppLevel` jest przycinany do 1..50.
 - `nowEpoch` = `rtcEpoch()`; 0 oznacza niewazny RTC i blokuje punkty (mecz nadal sie liczy).
 - UI: rozroznij `award.blocked` (komunikat o limicie godzinowym) od `PVP_ABORTED` (brak rozliczenia).
+
+## Ucieczka z walki
+Decyzja wlasciciela: ucieczka z walki PvP zawsze kosztuje uciekajacego `PVP_QUIT_PENALTY` (1) punkt postepu.
+- `trainerApplyQuitPenalty`: `progress = max(0, progress - 1)`; poziom nigdy nie spada, na poziomie 50 bez efektu; W/L/D, `matchSeq` i historia bez zmian.
+- Kare naklada lokalnie uciekajacy (`Pet::recordPvpQuit()`). Pakiet ABORT od przeciwnika nigdy nie karze odbiorcy.
+- Zanik zasiegu / timeout nie karze nikogo (nie wiadomo, kto uciekl).
+- Zamkniecie urzadzenia w trakcie walki: flaga `pvpbat` w NVS (poza `PetBackup`, `BACKUP_VERSION` bez zmian), ustawiana przez `pvpBattleBegin()`
+  i kasowana przez `pvpBattleEnd()`. Jesli `Pet::begin()` zastanie flage, nalozy kare, zapisze ja (`save()`) i dopiero potem skasuje flage
+  (przerwanie miedzy tymi krokami da co najwyzej druga kare, nigdy darmowa ucieczke). `importBackup` kasuje flage, `factoryReset` czysci cala NVS.
+
+Kontrakt dla T4 (wszystkie wywolania z `loop()`, nigdy z callbacku ESP-NOW; maszyna stanow wymuszona w `Pet`: begin -> (wynik | quit) -> koniec):
+- `pvpBattleBegin()` przy `PVP_EVT_BATTLE_START` (nie przy CHALLENGE/ACCEPT), przy starcie walki, nie w srodku animacji (zapis NVS). Idempotentne.
+- `recordPvpQuit()` przy swiadomym wyjsciu gracza w trakcie walki, przed wynikiem. Kara tylko gdy flaga ustawiona (lustro RAM `pvpBattleActive`); zapisuje sam klucz `tprog`, potem kasuje flage. Po `recordPvpMatch` zwraca false bez kary.
+- `recordPvpMatch()` kasuje flage po swoim `save()`: wynik i kara wykluczaja sie dla jednej walki, wylaczenie na ekranie wyniku nie karze.
+- `pvpBattleEnd()` tylko przy timeoucie / ABORT od przeciwnika (bez kary).
+
+Uwagi do decyzji wlasciciela:
+- Crash / WDT / brownout w trakcie walki tez karze (flaga nie odroznia przyczyny); filtr po `esp_reset_reason` swiadomie pominiety ("ucieczka zawsze -1").
+- Kara -1 rowna sie przegranej z nizszym poziomem, a ucieczka odbiera punkty przeciwnikowi: strona nieuciekajaca dostaje dzis 0 (ABORTED). Do decyzji.

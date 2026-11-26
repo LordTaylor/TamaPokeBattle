@@ -62,6 +62,7 @@ void Pet::begin() {
   } else {
     load();
   }
+  applyPendingBattleQuit();
   ensureStepDay();
   lastTick = millis();
 }
@@ -292,7 +293,7 @@ bool Pet::importBackup(const uint8_t *data, size_t length) {
   prefs.putBool("init", true);
   fullness=b.fullness;joy=b.joy;energy=b.energy;hygiene=b.hygiene;poops=b.poops;weight=b.weight;geneAtk=b.geneAtk;geneDef=b.geneDef;geneSpe=b.geneSpe;trAtk=b.trAtk;trDef=b.trDef;trSpe=b.trSpe;berryKnown=b.berryKnown;shiny=b.shiny;eggShiny=b.eggShiny;starterPick=b.starterPick;eggTaps=b.eggTaps;careMistakes=b.careMistakes;lastEnd=b.lastEnd;bond=b.bond;collectionFrame=b.collectionFrame;dailyGoalDone=b.dailyGoalDone;expeditionRewardItem=b.expeditionRewardItem;expeditionSite=b.expeditionSite;hoennSealMask=b.hoennSealMask & 7;stepDailyRewardMask=b.stepDailyRewardMask;stepMilestoneMask=b.stepMilestoneMask;pendingStepRewardMask=b.pendingStepRewardMask;shakeCountToday=b.shakeCountToday;walkJoyToday=b.walkJoyToday;walkJoyHour=b.walkJoyHour;walkBondToday=b.walkBondToday;evoDeclinedLv=b.evoDeclinedLv;
   speciesId=b.speciesId;eggTarget=b.eggTarget;ageMinutes=b.ageMinutes;lastSeenEpoch=b.lastSeenEpoch;lastCareDay=b.lastCareDay;lastPetInteractMinute=b.lastPetInteractMinute;dailyGoalDay=b.dailyGoalDay;expeditionEndEpoch=b.expeditionEndEpoch;stepDay=b.stepDay;stepsToday=b.stepsToday;stepsTotal=b.stepsTotal;lastMorningDay=b.lastMorningDay;shakeDay=b.shakeDay;walkDay=b.walkDay;walkHour=b.walkHour;evoDeclinedAge=b.evoDeclinedAge;streak=b.streak;bestStreak=b.bestStreak;medals=b.medals;totalMedals=b.totalMedals;lastMilestone=b.lastMilestone;gameHi=b.gameHi;strHi=b.strHi;catchHi=b.catchHi;memoHi=b.memoHi;cleanHi=b.cleanHi;typeHi=b.typeHi;battleWins=b.battleWins;battleLosses=b.battleLosses;battleStreak=b.battleStreak;bestBattleStreak=b.bestBattleStreak;dexRewardMask=b.dexRewardMask;
-  memcpy(dailyGoalType,b.dailyGoalType,sizeof(dailyGoalType));memcpy(dailyGoalProgress,b.dailyGoalProgress,sizeof(dailyGoalProgress));memcpy(itemCounts,b.itemCounts,sizeof(itemCounts));memcpy(dexReg,b.dexReg,sizeof(dexReg));memcpy(dexShinyReg,b.dexShinyReg,sizeof(dexShinyReg));memcpy(dexCaught,b.dexCaught,sizeof(dexCaught));memcpy(nick,b.nick,sizeof(nick));nick[sizeof(nick)-1]=0;ceremony=CER_NONE;if (collectionFrame >= unlockedCollectionFrameCount()) collectionFrame=0;save();return true;
+  memcpy(dailyGoalType,b.dailyGoalType,sizeof(dailyGoalType));memcpy(dailyGoalProgress,b.dailyGoalProgress,sizeof(dailyGoalProgress));memcpy(itemCounts,b.itemCounts,sizeof(itemCounts));memcpy(dexReg,b.dexReg,sizeof(dexReg));memcpy(dexShinyReg,b.dexShinyReg,sizeof(dexShinyReg));memcpy(dexCaught,b.dexCaught,sizeof(dexCaught));memcpy(nick,b.nick,sizeof(nick));nick[sizeof(nick)-1]=0;ceremony=CER_NONE;if (collectionFrame >= unlockedCollectionFrameCount()) collectionFrame=0;clearBattleFlag();save();return true;
 }
 
 bool Pet::hasEvolutionPath(int16_t dex) const {
@@ -529,7 +530,40 @@ TrainerAward Pet::recordPvpMatch(PvpResult result, const char *oppNick, size_t o
   pvpHistoryPush(pvpHistory, nickClean, result, oppLevel, trainerStats.matchSeq);
   if (award.applied) farmGuardRecord(farmGuard, oppDeviceId, nowEpoch);
   save();
+  clearBattleFlag();  // wynik i kara wykluczaja sie dla jednej walki
   return award;
+}
+
+bool Pet::recordPvpQuit() {
+  if (!pvpBattleActive) return false;  // po wyniku / poza walka kara nie nalezy sie
+  bool changed = trainerApplyQuitPenalty(trainerStats);
+  if (changed) prefs.putUShort("tprog", trainerStats.progress);  // pojedynczy wpis NVS
+  clearBattleFlag();
+  return changed;
+}
+
+void Pet::pvpBattleBegin() {
+  if (pvpBattleActive) return;  // idempotentne, bez zbednych zapisow
+  prefs.putBool(PVP_BATTLE_KEY, true);
+  pvpBattleActive = true;
+}
+
+void Pet::pvpBattleEnd() {
+  clearBattleFlag();
+}
+
+void Pet::clearBattleFlag() {
+  if (prefs.isKey(PVP_BATTLE_KEY)) prefs.remove(PVP_BATTLE_KEY);  // remove() na brakujacym kluczu loguje blad
+  pvpBattleActive = false;
+}
+
+// Flaga ustawiona po restarcie = walka przerwana zamknieciem urzadzenia. Kolejnosc: zapis kary
+// (sam klucz tprog), potem kasowanie flagi; przerwanie miedzy nimi da co najwyzej druga kare.
+void Pet::applyPendingBattleQuit() {
+  pvpBattleActive = prefs.getBool(PVP_BATTLE_KEY, false);
+  if (!pvpBattleActive) return;
+  if (trainerApplyQuitPenalty(trainerStats)) prefs.putUShort("tprog", trainerStats.progress);
+  clearBattleFlag();
 }
 
 void Pet::setTrainer(const char *name) {

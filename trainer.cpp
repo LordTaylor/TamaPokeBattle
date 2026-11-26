@@ -69,6 +69,12 @@ TrainerAward trainerApplyResult(TrainerStats &stats, PvpResult result, uint8_t o
   return award;
 }
 
+bool trainerApplyQuitPenalty(TrainerStats &stats) {
+  if (stats.level >= TRAINER_LEVEL_MAX || stats.progress == 0) return false;
+  stats.progress = stats.progress > PVP_QUIT_PENALTY ? (uint16_t)(stats.progress - PVP_QUIT_PENALTY) : 0;
+  return true;
+}
+
 void sanitizeTrainerStats(TrainerStats &stats) {
   if (stats.level < TRAINER_LEVEL_MIN) stats.level = TRAINER_LEVEL_MIN;
   if (stats.level > TRAINER_LEVEL_MAX) stats.level = TRAINER_LEVEL_MAX;

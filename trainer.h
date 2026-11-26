@@ -9,6 +9,7 @@
 #define PVP_POINTS_WIN 3
 #define PVP_POINTS_DRAW 2
 #define PVP_POINTS_LOSS 1
+#define PVP_QUIT_PENALTY 1   // ucieczka z walki: -punkty dla uciekajacego (poziom nie spada)
 #define PVP_RANK_BONUS 2   // wygrana z wyzszym poziomem: +; przegrana z nizszym: -
 
 #define TRAINER_COST_BASE 10
@@ -57,6 +58,9 @@ struct PvpHistoryEntry {
 uint16_t trainerLevelCost(uint8_t level);  // koszt awansu z level na level+1; 0 dla level >= max
 int8_t trainerPointsDelta(PvpResult result, uint8_t myLevel, uint8_t oppLevel);
 TrainerAward trainerApplyResult(TrainerStats &stats, PvpResult result, uint8_t oppLevel, bool pointsAllowed);
+// Kara za ucieczke z walki: progress = max(0, progress - PVP_QUIT_PENALTY); poziom bez zmian,
+// na poziomie max bez efektu. Nie rusza W/L/D ani matchSeq. Zwraca true, gdy progress sie zmienil.
+bool trainerApplyQuitPenalty(TrainerStats &stats);
 void sanitizeTrainerStats(TrainerStats &stats);
 
 // Blokuje, gdy nowEpoch == 0 (brak wiarygodnego czasu), gdy zegar jest cofniety wzgledem wpisu
