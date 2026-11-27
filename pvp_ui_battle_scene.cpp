@@ -106,15 +106,29 @@ void pvpBattleDrawSides(const PvpApp &app, uint32_t now, uint16_t ink) {
   drawTypeChips(BATTLE_HPBAR_R_X + BATTLE_HPBAR_W, BATTLE_CHIPS_Y, DEX_TBL[app.model().oppReady.dex], true);
 }
 
+// No SD (no animation, no thumbnail): a species-colored disc with the Pokedex number keeps both fighters visible.
+static void drawSpriteStandIn(int16_t dex, int cx) {
+  if (dex < 0 || dex > DEX_COUNT) dex = 0;
+  gfx->fillCircle(cx, BATTLE_STANDIN_Y, BATTLE_STANDIN_R, DEX_TBL[dex].accent);
+  gfx->drawCircle(cx, BATTLE_STANDIN_Y, BATTLE_STANDIN_R, COL_INK);
+  char num[8];
+  snprintf(num, sizeof(num), "%d", (int)dex);
+  pvpDrawCentered(num, BATTLE_STANDIN_Y - 7, 2, COL_BG);
+}
+
 void pvpBattleDrawSprites(const PvpApp &app, uint32_t now) {
   if (pmd.loaded) {
     drawPmdAct(PMD_IDLE, BATTLE_SPRITE_L_X, BATTLE_SPRITE_GROUND_Y, now, true, false, BATTLE_SPRITE_SCALE);
   } else if (const uint8_t *th = thumbs.get(pet.speciesId)) {
     drawThumb(th, BATTLE_THUMB_L_X, BATTLE_THUMB_Y, BATTLE_SPRITE_SCALE, false);
+  } else {
+    drawSpriteStandIn(pet.speciesId, BATTLE_SPRITE_L_X);
   }
   if (wildPmd.loaded) {
     drawPmdActM(wildPmd, PMD_IDLE, BATTLE_SPRITE_R_X, BATTLE_SPRITE_GROUND_Y, now, true, false, BATTLE_SPRITE_SCALE);
   } else if (const uint8_t *th = thumbs.get(app.model().oppReady.dex)) {
     drawThumb(th, BATTLE_THUMB_R_X, BATTLE_THUMB_Y, BATTLE_SPRITE_SCALE, false);
+  } else {
+    drawSpriteStandIn(app.model().oppReady.dex, BATTLE_SPRITE_R_X);
   }
 }
