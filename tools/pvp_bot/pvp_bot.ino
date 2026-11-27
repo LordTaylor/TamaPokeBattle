@@ -157,6 +157,7 @@ void handleSerial() {
 void setup() {
   Serial.begin(115200);
   delay(1500);
+  gApp.setBattleEnabled(true);  // the bot always fights; the game keeps its staging gate
   Serial.println("BOT ready (PvP core over ESP-NOW)");
 }
 

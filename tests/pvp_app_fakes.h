@@ -140,6 +140,7 @@ struct AppSide {
   PvpApp app;
   AppSide(const std::string &tag, OrderLog *log, uint32_t id, uint16_t dex, uint8_t lvl)
       : app(link, host, host) {
+    app.setBattleEnabled(true);  // battle tests run the full flow; the gate has its own test
     link.tag = host.tag = tag;
     link.log = host.log = log;
     link.mac[0] = 0x10;

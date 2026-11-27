@@ -63,9 +63,12 @@ void trackPeers(const PvpUiModel &m) {
 
 // T4.2 stage guard: no battle UI yet, so the match ends before BATTLE_START with a "coming soon" note.
 void guardMissingBattleUi(PvpApp &app, uint32_t now) {
+  static bool shown = false;
   const PvpUiModel &m = app.model();
-  if (pvpui::BATTLE_UI_READY || m.phase != PVP_UI_PREPARING || m.oppReady.dex == 0) return;
-  if (app.leave(now)) pvpToastShow(PVP_S_SOON, pvpui::COL_WARN, now, pvpui::NOTICE_MS);
+  if (m.phase == PVP_UI_IDLE) shown = false;
+  if (pvpui::BATTLE_UI_READY || shown || m.phase != PVP_UI_STOPPING || m.oppReady.dex == 0) return;
+  shown = true;  // the core gate (PVP_BATTLE_ENABLED) ended the match; tell the player why
+  pvpToastShow(PVP_S_SOON, pvpui::COL_WARN, now, pvpui::NOTICE_MS);
 }
 
 }  // namespace

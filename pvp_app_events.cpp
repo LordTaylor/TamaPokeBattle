@@ -99,6 +99,11 @@ void PvpApp::onOpponentReady(const PvpEvent &e, uint32_t nowMs) {
 
 void PvpApp::onBattleStart(uint32_t nowMs) {
   if (rejected_ || !match_.ready() || model_.phase != PVP_UI_PREPARING) return;
+  if (!battleEnabled_) {  // staging gate: no flag, no penalty, no result
+    beginStop(nowMs);
+    session_.abort(nowMs);
+    return;
+  }
   battleOpen_ = true;
   ledger_.battleBegin();  // from now on an escape costs a point
   model_.round = 0;
