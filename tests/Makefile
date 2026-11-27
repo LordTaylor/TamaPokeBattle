@@ -6,11 +6,12 @@ BATTLE_TEST_OBJS = build/battle_tests.o build/battle.o
 
 .PHONY: test web-test clean
 
-test: build/pet_tests build/battle_tests build/i18n_tests build/trainer_tests web-test
+test: build/pet_tests build/battle_tests build/i18n_tests build/trainer_tests build/power_status_tests web-test
 	./build/pet_tests
 	./build/battle_tests
 	./build/i18n_tests
 	./build/trainer_tests
+	./build/power_status_tests
 
 web-test:
 	node web_serial_tests.mjs
@@ -221,3 +222,6 @@ build/pvp_ui_text.o: ../pvp_ui_text.cpp ../pvp_ui_text.h ../pvp_ui_theme.h ../sp
 	$(CXX) $(CXXFLAGS) -c ../pvp_ui_text.cpp -o $@
 
 test: pvp-ui-text-test
+
+build/power_status_tests: power_status_tests.cpp ../power_status.h | build
+	$(CXX) $(CXXFLAGS) power_status_tests.cpp -o $@
