@@ -28,3 +28,10 @@ Test UI na plytce, potem review Opus calosci i PR. (Dawny punkt: po raporcie age
 - Waveshare: firmware TamaPoke release z nakladka baterii, po flashu sd=0 do pelnego cyklu zasilania
 - N16R8: bot (pvp_bot), port /dev/cu.usbmodem2101
 - PR #10 (nakladka baterii) otwarty, czeka na ocene wygladu na ekranie
+
+## Review Opus integracji T4.2 (agentWork/review-t42-integracja.md)
+- B1 (blokujacy): zaslepka UI nie dzialala, walka startowala (flaga NVS, kara -1, auto-walka) -> naprawione bramka w rdzeniu PVP_BATTLE_ENABLED=false (PvpApp::setBattleEnabled, test + mutacja zabita); T4.3 wlacza razem z pvpui::BATTLE_UI_READY
+- B1b: przycisk UCIEKAJ nad ANULUJ znika wraz z B1
+- B2: gitlinki .claude/worktrees w repo -> usuniete z indeksu, .gitignore
+- Niekrytyczne do zrobienia: render STOPPING (pusta klatka 200 ms), konkretne powody odmowy (T4.3), testGeom/testCenter w pvp_ui_text_tests (testy ukladu - usunac), pelne save() od ensureDailyGoals w trakcie PvP
+- T4.3: agent aea0f4e9c798cdabb w toku (worktree), dziennik agentWork/a-pvp-ui-t43.md
