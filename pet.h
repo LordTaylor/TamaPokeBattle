@@ -4,6 +4,7 @@
 #include "time_utils.h"
 #include "dex.h"
 #include "trainer.h"
+#include "pvp_badges.h"
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -152,6 +153,7 @@ public:
   TrainerStats trainerStats;
   FarmGuard farmGuard;
   PvpHistoryEntry pvpHistory[PVP_HISTORY_SIZE];
+  PvpBadge pvpBadges[PVP_BADGE_SLOTS];  // odznaki PvP (jeden wpis na rywala), poza backupem
   // medallas: del individuo + contador acumulado entre todas las crianzas
   uint16_t medals = 0, totalMedals = 0;
   uint16_t newMedal = 0;   // recien conseguida(s), para celebrar
@@ -343,7 +345,7 @@ public:
   void rename(const char *name);
   void setTrainer(const char *name);
   bool hasTrainer() const { return trainer[0] != 0; }
-  TrainerAward recordPvpMatch(PvpResult result, const char *oppNick, size_t oppNickLen, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch);
+  TrainerAward recordPvpMatch(PvpResult result, const char *oppNick, size_t oppNickLen, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch, bool badgeEligible = false);
   // Ucieczka z walki PvP: -PVP_QUIT_PENALTY punktow. Flaga "walka w toku" (NVS, poza backupem)
   // karze tez wylaczenie urzadzenia w trakcie walki: kara przy nastepnym begin().
   bool recordPvpQuit();  // kara tylko gdy walka w toku (flaga); false = brak kary

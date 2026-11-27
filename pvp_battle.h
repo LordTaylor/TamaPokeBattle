@@ -11,7 +11,7 @@
 // Rules: docs/pvp-battle-rules.md
 
 // Bump on every change of a rule, constant or formula that affects results.
-// Exchanged in the handshake and mixed into the state hash.
+// Mixed into the state hash (NOT in the handshake): bump PVP_PROTO_VERSION together with it.
 constexpr uint8_t PVP_RULES_VERSION = 3;
 
 enum PvpSideId : uint8_t { PVP_SIDE_A = 0, PVP_SIDE_B = 1 };

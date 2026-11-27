@@ -67,3 +67,17 @@ constexpr uint8_t PVP_LUCK_MOD = 100;
 // --- Transport (ESP-NOW) ---
 constexpr uint8_t PVP_WIFI_CHANNEL = 1;       // fixed channel for both devices, set after every WiFi start
 constexpr uint8_t PVP_RX_QUEUE_LEN = 16;      // static receive queue (callback only copies packets into it)
+
+// --- Stat ranges against the Pokedex (Pet::calcStat = base * gene / 100 + level + training) ---
+constexpr uint8_t PVP_GENE_MIN = 90;        // Pet rolls 90 + random(21)
+constexpr uint8_t PVP_GENE_MAX = 110;
+constexpr uint8_t PVP_TRAINING_MAX = 100;
+
+// --- App layer (PvpApp) ---
+constexpr uint32_t PVP_SEARCH_IDLE_MS = 120000;  // search screen: no user interaction -> leave
+constexpr uint32_t PVP_RESULT_IDLE_MS = 30000;   // result / end screen: no interaction -> leave
+constexpr uint32_t PVP_LINK_FLUSH_MS = 200;      // hard limit of waiting for in-flight packets on stop
+constexpr uint32_t PVP_ROUND_LOCK_MS = 250;      // taps ignored after a round is confirmed (spec E.2)
+constexpr uint32_t PVP_RESULT_LOCK_MS = 800;     // result screen: OK ignored this long (used by the UI)
+constexpr uint8_t PVP_PUMP_MAX_RX = 8;           // received packets handled per update()
+constexpr uint8_t PVP_PUMP_MAX_EVENTS = 2 * PVP_EVENT_QUEUE;  // events handled per drain

@@ -517,7 +517,7 @@ static void nickOrUnknown(char *nick) {
 }
 
 // oppDeviceId ma pochodzic z MAC nadawcy (callback ESP-NOW), nie z payloadu.
-TrainerAward Pet::recordPvpMatch(PvpResult result, const char *oppNick, size_t oppNickLen, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch) {
+TrainerAward Pet::recordPvpMatch(PvpResult result, const char *oppNick, size_t oppNickLen, uint8_t oppLevel, uint32_t oppDeviceId, uint32_t nowEpoch, bool badgeEligible) {
   if (result == PVP_ABORTED) return TrainerAward();
   if (oppLevel < TRAINER_LEVEL_MIN) oppLevel = TRAINER_LEVEL_MIN;
   if (oppLevel > TRAINER_LEVEL_MAX) oppLevel = TRAINER_LEVEL_MAX;
@@ -529,6 +529,9 @@ TrainerAward Pet::recordPvpMatch(PvpResult result, const char *oppNick, size_t o
   TrainerAward award = trainerApplyResult(trainerStats, result, oppLevel, allowed);
   pvpHistoryPush(pvpHistory, nickClean, result, oppLevel, trainerStats.matchSeq);
   if (award.applied) farmGuardRecord(farmGuard, oppDeviceId, nowEpoch);
+  if (pvpBadgeEarned(result, award, badgeEligible)) {
+    pvpBadgeRecord(pvpBadges, oppDeviceId, nickClean, strlen(nickClean), oppLevel, nowEpoch, trainerStats.matchSeq);
+  }
   save();
   clearBattleFlag();  // wynik i kara wykluczaja sie dla jednej walki
   return award;
@@ -1728,6 +1731,9 @@ void Pet::save() {
   // Bloby to zrzut struktur bez wersji: zmiana layoutu FarmGuard/PvpHistoryEntry = nowy klucz NVS.
   prefs.putBytes("tfarm", &farmGuard, sizeof(farmGuard));
   prefs.putBytes("thist", pvpHistory, sizeof(pvpHistory));
+  uint8_t badgeBlob[PVP_BADGE_BLOB_BYTES];
+  pvpBadgesSerialize(pvpBadges, badgeBlob);
+  prefs.putBytes(PVP_BADGE_KEY, badgeBlob, sizeof(badgeBlob));
 }
 
 void Pet::loadTrainerStats() {
@@ -1741,6 +1747,12 @@ void Pet::loadTrainerStats() {
   loadDexBitmap(prefs, "tfarm", reinterpret_cast<uint8_t *>(&farmGuard), sizeof(farmGuard));
   loadDexBitmap(prefs, "thist", reinterpret_cast<uint8_t *>(pvpHistory), sizeof(pvpHistory));
   sanitizePvpHistory(pvpHistory);
+  uint8_t badgeBlob[PVP_BADGE_BLOB_BYTES] = {};
+  size_t badgeLen = 0;
+  if (prefs.getBytesLength(PVP_BADGE_KEY) == sizeof(badgeBlob)) {
+    badgeLen = prefs.getBytes(PVP_BADGE_KEY, badgeBlob, sizeof(badgeBlob));
+  }
+  pvpBadgesDeserialize(badgeBlob, badgeLen, pvpBadges);  // wrong or short read = empty ring
   for (PvpHistoryEntry &e : pvpHistory) {
     if (e.seq == 0) continue;
     char clean[TRAINER_NAME_MAX + 1] = {};

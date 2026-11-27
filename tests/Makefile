@@ -138,3 +138,64 @@ build/pvpin/pvp_packet.o: ../pvp_packet.cpp $(PVP_HEADERS) | build/pvpin
 	$(CXX) $(CXXFLAGS) -c ../pvp_packet.cpp -o $@
 
 test: pvp-in-packet-test
+
+# --- PvP T4.1 core: validator, match, badges, pump, app (host tests, no radio, no UI) ---
+PVP_CORE_HEADERS = ../pvp_in_packet.h ../pvp_link.h ../pvp_profile.h ../pvp_ledger.h ../pvp_validator.h ../pvp_match.h ../pvp_pump.h ../pvp_app.h ../pvp_ui_model.h ../pvp_badges.h ../pvp_versions.h ../pvp_battle.h ../battle_core.h $(PVP_HEADERS) ../trainer.h ../dex.h
+
+# extra prerequisites only; the recipe still comes from the build/pvp_%.o pattern rule
+build/pvp_validator.o build/pvp_match.o build/pvp_pump.o build/pvp_app.o build/pvp_app_events.o build/pvp_badges.o build/pvp_battle.o: $(PVP_CORE_HEADERS)
+
+# pet.cpp now uses the badge ring; its tests also cover the validator <-> Pet::calcStat contract
+PET_TEST_OBJS += build/pvp_badges.o build/pvp_validator.o build/pvp_battle.o build/pvp_packet.o build/battle.o
+build/pet_tests: build/pvp_badges.o build/pvp_validator.o build/pvp_battle.o build/pvp_packet.o build/battle.o
+build/pet_tests.o build/pet.o: ../pvp_badges.h ../pvp_validator.h
+
+PVP_VALIDATOR_TEST_OBJS = build/pvp_validator_tests.o build/pvp_validator.o build/pvp_battle.o build/pvp_packet.o build/battle.o
+PVP_MATCH_TEST_OBJS = build/pvp_match_tests.o build/pvp_match.o build/pvp_battle.o build/pvp_packet.o build/battle.o
+PVP_BADGES_TEST_OBJS = build/pvp_badges_tests.o build/pvp_badges.o
+PVP_APP_TEST_OBJS = build/pvp_app_tests.o build/pvp_app.o build/pvp_app_events.o build/pvp_pump.o build/pvp_match.o build/pvp_validator.o build/pvp_badges.o build/pvp_battle.o build/pvp_packet.o build/pvp_peers.o build/pvp_reliable.o build/pvp_session.o build/pvp_session_handshake.o build/pvp_session_battle.o build/battle.o
+
+.PHONY: pvp-core-test pvp-validator-test pvp-match-test pvp-badges-test pvp-app-test
+
+pvp-core-test: pvp-validator-test pvp-match-test pvp-badges-test pvp-app-test
+
+pvp-validator-test: build/pvp_validator_tests
+	./build/pvp_validator_tests
+
+pvp-match-test: build/pvp_match_tests
+	./build/pvp_match_tests
+
+pvp-badges-test: build/pvp_badges_tests
+	./build/pvp_badges_tests
+
+pvp-app-test: build/pvp_app_tests
+	./build/pvp_app_tests
+
+build/pvp_validator_tests: $(PVP_VALIDATOR_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_VALIDATOR_TEST_OBJS) -o $@
+
+build/pvp_match_tests: $(PVP_MATCH_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_MATCH_TEST_OBJS) -o $@
+
+build/pvp_badges_tests: $(PVP_BADGES_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_BADGES_TEST_OBJS) -o $@
+
+build/pvp_app_tests: $(PVP_APP_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_APP_TEST_OBJS) -o $@
+
+build/pvp_validator_tests.o: pvp_validator_tests.cpp pvp_test_harness.h $(PVP_CORE_HEADERS) | build
+	$(CXX) $(CXXFLAGS) -c pvp_validator_tests.cpp -o $@
+
+build/pvp_match_tests.o: pvp_match_tests.cpp pvp_test_harness.h $(PVP_CORE_HEADERS) | build
+	$(CXX) $(CXXFLAGS) -c pvp_match_tests.cpp -o $@
+
+build/pvp_badges_tests.o: pvp_badges_tests.cpp pvp_test_harness.h $(PVP_CORE_HEADERS) | build
+	$(CXX) $(CXXFLAGS) -c pvp_badges_tests.cpp -o $@
+
+build/pvp_app_tests.o: pvp_app_tests.cpp pvp_app_fakes.h pvp_test_harness.h $(PVP_CORE_HEADERS) | build
+	$(CXX) $(CXXFLAGS) -c pvp_app_tests.cpp -o $@
+
+test: pvp-core-test
+
+# T4.1 review fixes: headers split out of pvp_pump.h / pvp_validator.h / pvp_profile.h
+build/pvp_validator.o build/pvp_match.o build/pvp_pump.o build/pvp_app.o build/pvp_app_events.o build/pvp_badges.o build/pvp_validator_tests.o build/pvp_match_tests.o build/pvp_badges_tests.o build/pvp_app_tests.o: ../pvp_event_sink.h ../pvp_stat_range.h ../pvp_deny_reason.h

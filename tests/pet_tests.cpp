@@ -9,6 +9,7 @@
 #include "time_utils.h"
 #include "dayphase.h"
 #include "thumb_format.h"
+#include "pvp_validator.h"
 
 uint32_t gMockMillis = 0;
 SerialMock Serial;
@@ -1401,7 +1402,69 @@ static void testPvpQuitFlagClearedByImportAndWipe() {
   EXPECT_TRUE(!PetTestAccess::prefs(p).isKey(PVP_BATTLE_KEY));
 }
 
+// Kontrakt walidator <-> Pet::calcStat: kazda legalna statystyka Peta miesci sie w pvpStatRange.
+static void testPvpStatRangeCoversPetStats() {
+  const uint8_t genes[] = {90, 100, 110};
+  const uint8_t trainings[] = {0, 55, 100};
+  const uint8_t levels[] = {1, 16, 50, 100};
+  for (int dex = 1; dex <= DEX_COUNT; dex++) {
+    for (uint8_t lvl : levels) {
+      for (uint8_t g : genes) {
+        for (uint8_t tr : trainings) {
+          Pet pet = hatchedPet(4);
+          pet.speciesId = dex;
+          pet.ageMinutes = (uint32_t)(lvl - 1) * MINUTES_PER_LEVEL;
+          pet.geneAtk = pet.geneDef = pet.geneSpe = g;
+          pet.trAtk = pet.trDef = pet.trSpe = tr;
+          PvpStatRange a = pvpStatRange(DEX_TBL[dex].bAtk, pet.level());
+          PvpStatRange d = pvpStatRange(DEX_TBL[dex].bDef, pet.level());
+          PvpStatRange e = pvpStatRange(DEX_TBL[dex].bSpe, pet.level());
+          bool ok = pet.atkStat() >= a.lo && pet.atkStat() <= a.hi && pet.defStat() >= d.lo &&
+                    pet.defStat() <= d.hi && pet.speStat() >= e.lo && pet.speStat() <= e.hi;
+          if (!ok) {
+            std::cerr << "FEHLER: pvpStatRange nie obejmuje statystyk dex " << dex << " lvl " << +lvl << "\n";
+            failures++;
+            return;
+          }
+        }
+      }
+    }
+  }
+}
+
+static void testPvpBadgesPersistAndStayOutsideBackup() {
+  Pet p;
+  p.begin();
+  EXPECT_TRUE(p.recordPvpMatch(PVP_WIN, "RIVAL", 5, 7, 0xBEEFu, 20000, true).applied);
+  EXPECT_EQ(p.pvpBadges[0].deviceId, 0xBEEFu);
+  EXPECT_EQ(p.pvpBadges[0].wins, 1);
+  EXPECT_TRUE(!p.recordPvpMatch(PVP_WIN, "RIVAL", 5, 7, 0xBEEFu, 20100, true).applied);  // FarmGuard: bez odznaki
+  EXPECT_EQ(p.pvpBadges[0].wins, 1);
+  p.recordPvpMatch(PVP_WIN, "WALKOVER", 8, 7, 0xCAFEu, 20200, false);                    // walkower: bez odznaki
+  EXPECT_EQ(p.pvpBadges[1].deviceId, 0u);
+
+  reloadFromNvs(p);
+  EXPECT_EQ(p.pvpBadges[0].deviceId, 0xBEEFu);
+  EXPECT_TRUE(std::strcmp(p.pvpBadges[0].nick, "RIVAL") == 0);
+
+  uint8_t blob[Pet::BACKUP_MAX_BYTES] = {};
+  size_t size = p.exportBackup(blob, sizeof(blob));
+  Pet other;
+  other.begin();
+  EXPECT_TRUE(other.importBackup(blob, size));
+  EXPECT_EQ(other.pvpBadges[0].deviceId, 0u);                 // backup nie niesie odznak
+  Pet keeper;
+  keeper.begin();
+  keeper.recordPvpMatch(PVP_WIN, "KEEP", 4, 3, 0x77u, 30000, true);
+  Pet source;
+  size = source.exportBackup(blob, sizeof(blob));
+  EXPECT_TRUE(keeper.importBackup(blob, size));
+  EXPECT_EQ(keeper.pvpBadges[0].deviceId, 0x77u);             // import backupu nie kasuje odznak
+}
+
 int main() {
+  testPvpStatRangeCoversPetStats();
+  testPvpBadgesPersistAndStayOutsideBackup();
   testPvpQuitFlagPenalizesAfterRestart();
   testPvpMatchResultClearsBattleFlag();
   testPvpQuitFlagClearedByImportAndWipe();
