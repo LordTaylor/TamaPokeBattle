@@ -11,13 +11,18 @@
 namespace {
 
 constexpr int16_t BOT_DEX = 4;                // Charmander
-constexpr uint8_t BOT_LEVEL = 12;
+constexpr uint8_t BOT_LEVEL = 2;
 constexpr char BOT_NICK[] = "BOTEK";
 constexpr uint8_t BOT_TRAINER_LEVEL = 1;
 constexpr uint32_t ACTION_DELAY_MS = 900;     // looks like a player, keeps rounds readable
 constexpr uint32_t RESULT_HOLD_MS = 4000;
 constexpr uint32_t REOPEN_DELAY_MS = 2500;
 constexpr uint8_t ATTACK_WEIGHT_PCT = 60;     // otherwise a random action
+constexpr uint32_t LED_PERIOD_MS = 3000;      // 'bot is on' signal: red then blue once per period
+constexpr uint32_t LED_FLASH_MS = 200;
+constexpr uint32_t LED_BLUE_AT_MS = 400;
+constexpr uint8_t LED_LEVEL = 40;
+constexpr uint8_t LED_PINS[] = {48, 38};      // WS2812 on the S3 DevKitC v1.0 / v1.1 boards
 
 class BotProfile : public PvpProfile {
  public:
@@ -141,6 +146,18 @@ void report(uint32_t now) {
   }
 }
 
+void blink(uint32_t now) {
+  uint32_t t = now % LED_PERIOD_MS;
+  uint8_t r = 0, b = 0;
+  if (t < LED_FLASH_MS) r = LED_LEVEL;
+  else if (t >= LED_BLUE_AT_MS && t < LED_BLUE_AT_MS + LED_FLASH_MS) b = LED_LEVEL;
+  static int16_t lastState = -1;
+  int16_t state = r ? 1 : (b ? 2 : 0);
+  if (state == lastState) return;  // write only on change
+  lastState = state;
+  for (uint8_t pin : LED_PINS) neopixelWrite(pin, r, 0, b);
+}
+
 void handleSerial() {
   while (Serial.available()) {
     char c = (char)Serial.read();
@@ -166,6 +183,7 @@ void loop() {
   gApp.update(now);
   report(now);
   drive(now);
+  blink(now);
   handleSerial();
   delay(10);
 }
