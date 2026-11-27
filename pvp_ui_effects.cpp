@@ -1,9 +1,10 @@
 // Phase-change effects of the PvP screens (spec C.2, C.3, C.8, C.12): sounds, screen wake,
-// toasts, redraw requests. Reads PvpApp::model() only; the sole action it takes on the app is the
-// T4.2 stage guard (leave before the battle starts, see pvpui::BATTLE_UI_READY).
+// toasts, redraw requests, battle sounds and the rival sprite. Reads PvpApp state only; it never
+// acts on the app.
 #include "pvp_app.h"
 #include "pvp_ui.h"
 #include "pvp_ui_bridge.h"
+#include "pvp_ui_fx.h"
 #include "pvp_ui_phase.h"
 #include "pvp_ui_toast.h"
 
@@ -61,14 +62,30 @@ void trackPeers(const PvpUiModel &m) {
   prevPeers = m.peerCount;
 }
 
-// T4.2 stage guard: no battle UI yet, so the match ends before BATTLE_START with a "coming soon" note.
-void guardMissingBattleUi(PvpApp &app, uint32_t now) {
-  static bool shown = false;
+bool battlePhase(PvpPhase p) { return p >= PVP_UI_CHOOSE && p <= PVP_UI_WAIT_FINAL; }
+
+// Polled once per loop, so it keys on state (battle seen, round counter) and not on single phase
+// changes: a round resolved and confirmed within one update still gets its sound.
+void trackBattle(const PvpApp &app, uint32_t now) {
+  static bool inBattle = false;
+  static uint8_t lastRound = 0;
   const PvpUiModel &m = app.model();
-  if (m.phase == PVP_UI_IDLE) shown = false;
-  if (pvpui::BATTLE_UI_READY || shown || m.phase != PVP_UI_STOPPING || m.oppReady.dex == 0) return;
-  shown = true;  // the core gate (PVP_BATTLE_ENABLED) ended the match; tell the player why
-  pvpToastShow(PVP_S_SOON, pvpui::COL_WARN, now, pvpui::NOTICE_MS);
+  uint8_t round = app.match().runtime().round;
+  if (battlePhase(m.phase) && !inBattle) {
+    inBattle = true;
+    lastRound = 0;
+    pvpFxBattleStart(m, now);
+  }
+  if (inBattle && round != lastRound) {
+    lastRound = round;
+    pvpFxRoundResolved(app);
+  }
+  if (inBattle && !battlePhase(m.phase)) {
+    inBattle = false;
+    pvpFxBattleEnd();
+    if (m.phase == PVP_UI_RESULT) pvpFxResult(m, now);
+  }
+  pvpFxTick(app, now);
 }
 
 }  // namespace
@@ -89,6 +106,6 @@ void pvpUiTrack(uint32_t now) {
     prevNotice = m.notice;
   }
   trackPeers(m);
-  guardMissingBattleUi(app, now);
+  trackBattle(app, now);
   if (pvpToastJustExpired(now)) cardDirty = true;
 }

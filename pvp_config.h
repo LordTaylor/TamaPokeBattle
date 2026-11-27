@@ -74,9 +74,9 @@ constexpr uint8_t PVP_GENE_MAX = 110;
 constexpr uint8_t PVP_TRAINING_MAX = 100;
 
 // --- Staging gate ---
-// false: a match ends before BATTLE_START (no ledger flag, no penalty, no result). Flip to true
-// together with pvpui::BATTLE_UI_READY once the battle screens ship.
-constexpr bool PVP_BATTLE_ENABLED = false;
+// false: a match ends before BATTLE_START (no ledger flag, no penalty, no result). On since the
+// battle screens shipped (pvpui::BATTLE_UI_READY).
+constexpr bool PVP_BATTLE_ENABLED = true;
 
 // --- App layer (PvpApp) ---
 constexpr uint32_t PVP_SEARCH_IDLE_MS = 120000;  // search screen: no user interaction -> leave

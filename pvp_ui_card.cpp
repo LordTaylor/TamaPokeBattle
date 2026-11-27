@@ -6,6 +6,7 @@
 #include "pvp_ui.h"
 #include "pvp_ui_bridge.h"
 #include "pvp_ui_draw.h"
+#include "pvp_ui_screens.h"
 #include "pvp_ui_text.h"
 #include "pvp_ui_theme.h"
 #include "pvp_ui_toast.h"
@@ -20,7 +21,10 @@ PvpStrId denyText(PvpDenyReason reason) {
   switch (reason) {
     case PVP_DENY_SLEEPING: return PVP_S_ASLEEP;
     case PVP_DENY_LOW_BATTERY: return PVP_S_LOW_BATTERY;
-    default: return PVP_S_UNAVAILABLE;  // egg, ceremony, no nick: the general fallback
+    case PVP_DENY_EGG: return PVP_S_DENY_EGG;
+    case PVP_DENY_CEREMONY: return PVP_S_DENY_CEREMONY;
+    case PVP_DENY_NO_NICK: return PVP_S_DENY_NO_NICK;
+    default: return PVP_S_UNAVAILABLE;  // last resort
   }
 }
 
@@ -112,6 +116,10 @@ void drawEntry(bool allowed, PvpDenyReason reason, uint32_t now) {
 }  // namespace
 
 void renderCardPvp() {
+  if (pvpBadgesViewOpen()) {
+    pvpBadgesDraw();
+    return;
+  }
   PvpDenyReason reason = PVP_DENY_NONE;
   bool allowed = pvpProfileInstance().canFight(reason);
   drawIdentity();
@@ -124,12 +132,22 @@ void renderCardPvp() {
   drawEntry(allowed, reason, millis());
 }
 
-void pvpCardResetSub() {
-  // The badge sub-view arrives with T4.3; nothing to reset yet.
+void pvpCardResetSub() { pvpBadgesClose(); }
+
+// The badge counter and the W/L/D tiles open the badge list (spec C.1).
+static bool tapBadgeEntry(int16_t x, int16_t y) {
+  bool counter = pvpHit(x, y, CARD_BADGES_X0, CARD_BADGES_Y0, CARD_BADGES_X1, CARD_BADGES_Y1);
+  bool tiles = pvpHit(x, y, CARD_TILES_X0, CARD_TILES_Y0, CARD_TILES_X1, CARD_TILES_Y1);
+  if (!counter && !tiles) return false;
+  pvpBadgesOpen();
+  return true;
 }
 
 bool pvpCardTap(int16_t x, int16_t y) {
-  if (y >= CARD_BACK_Y || !pvpHit(x, y, CARD_BTN_X0, CARD_BTN_Y0, CARD_BTN_X1, CARD_BTN_Y1)) return false;
+  if (pvpBadgesViewOpen()) return pvpBadgesTap(x, y);
+  if (y >= CARD_BACK_Y) return false;
+  if (tapBadgeEntry(x, y)) return true;
+  if (!pvpHit(x, y, CARD_BTN_X0, CARD_BTN_Y0, CARD_BTN_X1, CARD_BTN_Y1)) return false;
   uint32_t now = millis();
   PvpApp &app = pvpAppInstance();
   PvpDenyReason reason = PVP_DENY_NONE;

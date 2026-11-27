@@ -225,3 +225,22 @@ test: pvp-ui-text-test
 
 build/power_status_tests: power_status_tests.cpp ../power_status.h | build
 	$(CXX) $(CXXFLAGS) power_status_tests.cpp -o $@
+
+# --- PvP battle screen rules (T4.3 UI): round log text, clock, thresholds ---
+PVP_UI_BATTLE_TEST_OBJS = build/pvp_ui_battle_logic_tests.o build/pvp_ui_battle_logic.o build/i18n.o build/pvp_strings.o build/battle.o
+
+.PHONY: pvp-ui-battle-test
+
+pvp-ui-battle-test: build/pvp_ui_battle_logic_tests
+	./build/pvp_ui_battle_logic_tests
+
+build/pvp_ui_battle_logic_tests: $(PVP_UI_BATTLE_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_UI_BATTLE_TEST_OBJS) -o $@
+
+build/pvp_ui_battle_logic_tests.o: pvp_ui_battle_logic_tests.cpp ../pvp_ui_battle_logic.h | build
+	$(CXX) $(CXXFLAGS) -c pvp_ui_battle_logic_tests.cpp -o $@
+
+build/pvp_ui_battle_logic.o: ../pvp_ui_battle_logic.cpp ../pvp_ui_battle_logic.h ../pvp_battle.h ../battle_core.h ../pvp_strings.h ../i18n.h | build
+	$(CXX) $(CXXFLAGS) -c ../pvp_ui_battle_logic.cpp -o $@
+
+test: pvp-ui-battle-test

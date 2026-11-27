@@ -1,4 +1,4 @@
-// End screen without a result (spec C.8) and the T4.2 "PvP coming soon" stand-in for the battle phases.
+// End screen without a result (spec C.8).
 #include <stdio.h>
 
 #include "pvp_app.h"
@@ -52,7 +52,13 @@ void pvpUiDrawEnded(const PvpApp &app, uint32_t now) {
   if (text.code) pvpDrawCentered(text.code, END_CODE_Y, 1, COL_MUTED);
   pvpDrawCentered(TP(text.reason), END_REASON_Y, 2, text.color);
   if (text.second != NONE) pvpDrawCentered(TP(text.second), END_REASON2_Y, 2, text.color);
-  if (!m.resultRecorded) pvpDrawCentered(TP(PVP_S_NO_POINTS), END_POINTS_Y, 2, COL_INK);
+  if (!m.resultRecorded) {
+    pvpDrawCentered(TP(PVP_S_NO_POINTS), END_POINTS_Y, 2, COL_INK);
+  } else if (m.award.applied) {  // rival escaped: walkover win, points counted
+    char pts[24];
+    snprintf(pts, sizeof(pts), TP(PVP_S_POINTS_DELTA_FMT), (int)m.award.pointsDelta);
+    pvpDrawCentered(pts, END_POINTS_Y, 2, COL_OK);
+  }
   if (m.quitPenalty) {
     char line[40];
     snprintf(line, sizeof(line), TP(PVP_S_QUIT_PENALTY_FMT), (unsigned)PVP_QUIT_PENALTY);
@@ -65,26 +71,4 @@ void pvpUiTapEnded(PvpApp &app, int16_t x, int16_t y, uint32_t now) {
   if (!tapOk(x, y) || !app.canLeaveNow(now)) return;
   sfxPlay(SFX_TAP);
   app.leave(now);
-}
-
-void pvpUiDrawSoon(const PvpApp &app, uint32_t now) {
-  pvpDrawCentered(TP(PVP_S_SOON), SOON_Y, 3, COL_INK);
-  bool inBattle = app.model().phase != PVP_UI_RESULT;
-  if (inBattle) {
-    pvpDrawButton(END_OK_X0, END_OK_Y0, END_OK_X1, END_OK_Y1, COL_BAD, COL_WHITE, T(S_RUN_BATTLE));
-  } else {
-    drawOk(app.canLeaveNow(now), now);
-  }
-}
-
-void pvpUiTapSoon(PvpApp &app, int16_t x, int16_t y, uint32_t now) {
-  if (!tapOk(x, y)) return;
-  if (app.model().phase == PVP_UI_RESULT) {
-    if (!app.canLeaveNow(now)) return;
-    sfxPlay(SFX_TAP);
-    app.leave(now);
-  } else {
-    sfxPlay(SFX_TAP);
-    app.quit(now);  // the battle flag is set at this point: the quit penalty applies (spec C.6)
-  }
 }
