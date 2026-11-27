@@ -12,6 +12,8 @@ Po raporcie agenta UI (worktree, dziennik agentWork/a-pvp-ui-t42.md): zintegrowa
 [x] pvp_host_pet.h/.cpp (profil + ksiega na Pet)
 [x] bot testowy tools/pvp_bot + tools/build_pvp_bot.sh (N16R8, ten sam rdzen PvpApp)
 [x] test sprzetowy radia: pelna walka 18 rund Waveshare(bot) <-> N16R8(bot): wyniki komplementarne (W=0, N=2), brak desync, obie strony wrocily do SEARCHING
+[x] review Opus transportu (agentWork/review-t42-link.md): brak blokujacych; poprawione: atomowy gInFlight, kontrola set_channel, sciezka OUT w build_pvp_bot.sh, tempo bota
+[ ] DO ZROBIENIA z review: esp_now_del_peer przy koncu sesji (niekrytyczne), canFight tez przy wyzwaniu, +77 KB flash/+4.5 KB DRAM w release dopiero z hakami (merge razem z hakami A.4), test sprzetowy kary za ucieczke/forceStop/NVS w walce
 [~] agent UI (pvp_strings, pvp_ui_*) w toku
 [ ] pvp_app_instance.cpp, haki w TamaPoke.ino, CARD_COUNT 10
 [ ] build release + test sprzetowy UI z botem, review Opus, PR

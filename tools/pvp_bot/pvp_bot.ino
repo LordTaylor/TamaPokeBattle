@@ -65,6 +65,7 @@ PvpApp gApp(gLink, gProfile, gLedger);
 
 PvpPhase gLastPhase = PVP_UI_IDLE;
 uint32_t gPhaseSince = 0;
+uint16_t gActionRound = 0;  // round already answered; a new round restarts the delay
 uint32_t gReopenAt = 0;
 bool gChallengeRequested = false;
 
@@ -106,7 +107,8 @@ void drive(uint32_t now) {
       break;
     case PVP_UI_CHOOSE:
       gApp.touch(now);
-      if (now - gPhaseSince >= ACTION_DELAY_MS) {
+      if (m.round != gActionRound && now - gPhaseSince >= ACTION_DELAY_MS) {
+        gActionRound = m.round;
         uint8_t a = pickAction();
         Serial.printf("BOT round=%u action=%u ok=%d\n", m.round, a, gApp.submitAction(a, now));
       }
@@ -130,6 +132,11 @@ void report(uint32_t now) {
     Serial.printf("BOT phase %s -> %s round=%u end=%d result=%d\n", phaseName(gLastPhase),
                   phaseName(m.phase), m.round, (int)m.endReason, (int)m.result);
     gLastPhase = m.phase;
+    gPhaseSince = now;
+  }
+  static uint16_t lastRound = 0;
+  if (m.round != lastRound) {
+    lastRound = m.round;
     gPhaseSince = now;
   }
 }

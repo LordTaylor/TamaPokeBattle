@@ -7,6 +7,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
+#include <atomic>
+
 static_assert(PVP_MAX_PACKET <= ESP_NOW_MAX_DATA_LEN, "PvP packet exceeds the ESP-NOW payload limit");
 
 namespace {
@@ -19,7 +21,14 @@ uint8_t gRxStorage[PVP_RX_QUEUE_LEN * sizeof(PvpInPacket)];
 StaticQueue_t gRxQueueCb;
 QueueHandle_t gRxQueue = nullptr;
 
-volatile uint8_t gInFlight = 0;
+// Incremented in loop() (core 1), decremented in the send callback (core 0): needs atomics.
+std::atomic<uint8_t> gInFlight{0};
+
+void inFlightDec() {
+  uint8_t cur = gInFlight.load();
+  while (cur > 0 && !gInFlight.compare_exchange_weak(cur, (uint8_t)(cur - 1))) {
+  }
+}
 
 void onRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
   PvpInPacket packet;
@@ -28,7 +37,7 @@ void onRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
 }
 
 void onSent(const wifi_tx_info_t *, esp_now_send_status_t) {
-  if (gInFlight) gInFlight = gInFlight - 1;
+  inFlightDec();
 }
 
 }  // namespace
@@ -38,7 +47,10 @@ bool PvpEspNowLink::start(uint8_t outMac[6]) {
   WiFi.persistent(false);              // before mode(): keep the config out of NVS
   WiFi.setSleep(WIFI_PS_NONE);         // before mode(): STA_START re-applies getSleep()
   if (!WiFi.mode(WIFI_STA)) return false;
-  esp_wifi_set_channel(PVP_WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);  // not persisted across starts
+  if (esp_wifi_set_channel(PVP_WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE) != ESP_OK) {  // not persisted across starts
+    WiFi.mode(WIFI_OFF);
+    return false;
+  }
   if (esp_wifi_get_mac(WIFI_IF_STA, outMac) != ESP_OK) {
     WiFi.mode(WIFI_OFF);
     return false;
@@ -47,7 +59,7 @@ bool PvpEspNowLink::start(uint8_t outMac[6]) {
     gRxQueue = xQueueCreateStatic(PVP_RX_QUEUE_LEN, sizeof(PvpInPacket), gRxStorage, &gRxQueueCb);
   }
   xQueueReset(gRxQueue);
-  gInFlight = 0;
+  gInFlight.store(0);
   if (esp_now_init() != ESP_OK) {
     WiFi.mode(WIFI_OFF);
     return false;
@@ -75,7 +87,7 @@ void PvpEspNowLink::stop() {
   esp_now_unregister_recv_cb();
   esp_now_deinit();
   WiFi.mode(WIFI_OFF);
-  gInFlight = 0;
+  gInFlight.store(0);
 }
 
 bool PvpEspNowLink::ensurePeer(const uint8_t *mac) {
@@ -92,9 +104,9 @@ bool PvpEspNowLink::send(const PvpOutPacket &packet) {
   if (!running_ || packet.len == 0 || packet.len > PVP_MAX_PACKET) return false;
   const uint8_t *target = packet.broadcast ? BROADCAST_MAC : packet.mac;
   if (!packet.broadcast && !ensurePeer(target)) return false;
-  gInFlight = gInFlight + 1;
+  gInFlight.fetch_add(1);
   if (esp_now_send(target, packet.data, packet.len) != ESP_OK) {
-    gInFlight = gInFlight - 1;
+    inFlightDec();
     return false;
   }
   return true;
@@ -105,4 +117,4 @@ bool PvpEspNowLink::receive(PvpInPacket &packet) {
   return xQueueReceive(gRxQueue, &packet, 0) == pdTRUE;
 }
 
-uint8_t PvpEspNowLink::inFlight() const { return gInFlight; }
+uint8_t PvpEspNowLink::inFlight() const { return gInFlight.load(); }
