@@ -27,6 +27,9 @@
 #include "time_utils.h"
 #include "dayphase.h"
 #include "imu.h"
+#ifdef TAMAPOKE_LOCAL_TEST
+#include "pvp_diag.h"
+#endif
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
@@ -693,6 +696,9 @@ void handleSerial() {
   line.trim();
   if (line.length() == 0) return;
   if (sdSerialCommand(line)) return;
+#ifdef TAMAPOKE_LOCAL_TEST
+  if (pvpDiagCommand(line)) { markUiDirty(); return; }  // T4.0 measurement commands
+#endif
 
   // Browser save backup protocol: SAVEGET -> "SAVE <bytes>" + hex data + DONE;
   // SAVEPUT <bytes> -> OK + raw data -> DONE and reboot. The Pet checksum
