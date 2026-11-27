@@ -45,6 +45,7 @@ static bool formatWorst(const char *fmt, const std::string &spec, char *out, siz
   if (spec.empty()) std::snprintf(out, cap, "%s", fmt);
   else if (spec == "%u") std::snprintf(out, cap, fmt, 99u);
   else if (spec == "%u%u") std::snprintf(out, cap, fmt, 99u, 99u);
+  else if (spec == "%+d") std::snprintf(out, cap, fmt, -99);
   else if (spec == "%s") std::snprintf(out, cap, fmt, NICK);
   else return false;
   return true;

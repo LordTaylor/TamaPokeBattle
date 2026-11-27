@@ -45,8 +45,23 @@ X(NEAR_HINT, 26, "Acercaos mas", "Move closer", "Rapprochez-vous", "Geht naeher 
 X(BADGES_COUNT_FMT, 16, "INSIGNIAS: %u", "BADGES: %u", "BADGES: %u", "ABZEICHEN: %u", "BADGE: %u", "INSIGNIAS: %u", "ODZNAKI: %u")
 X(SOON, 22, "PvP pronto", "PvP coming soon", "PvP bientot", "PvP bald", "PvP in arrivo", "PvP em breve", "PvP wkrotce")
 X(IDLE_EXIT, 28, "Busqueda terminada", "Search ended", "Recherche terminee", "Suche beendet", "Ricerca terminata", "Busca encerrada", "Koniec wyszukiwania")
-// --- T4.3 (battle, result, badges) goes below; add rows here, never to StrId in i18n.h ---
-// Planned keys (texts in spec F.2): WAIT_OPP, REST_NOTE, AUTO_ATTACK, FOE_HIT_FMT, FOE_MISS, QUIT_Q,
-// QUIT_STAY, RESULT_DRAW, POINTS_DELTA_FMT, LEVEL_UP_FMT, BADGE_FMT, WAIT_CONFIRM, BADGES_TITLE,
-// BADGES_NONE, BLOCKED_SAME_RIVAL, BLOCKED_CLOCK.
-// STARTING ("Starting radio") from F.2 is left out on purpose: the radio starts synchronously, no screen shows it.
+// --- T4.3: battle, result, badges, refusal reasons ---
+X(WAIT_OPP, 22, "Esperando rival...", "Waiting for rival...", "Attente adversaire...", "Warte auf Gegner...", "Attendo avversario...", "Aguardando rival...", "Czekam na rywala...")
+X(REST_NOTE, 30, "Descanso: solo 2x, flojo", "Rest: only 2x, weak heal", "Repos: 2x seulement, faible", "Ruhen: nur 2x, schwach", "Riposo: solo 2x, debole", "Descanso: so 2x, fraco", "Odpoczynek: tylko 2x, slaby")
+X(AUTO_ATTACK, 22, "Sin jugada: ATAQUE", "Too slow: ATTACK", "Trop lent: ATTAQUE", "Zu langsam: ANGRIFF", "Troppo lento: ATTACCO", "Sem jogada: ATAQUE", "Brak ruchu: ATAK")
+X(FOE_HIT_FMT, 22, "Rival: golpe %u", "Rival: hit %u", "Rival: coup %u", "Gegner: Treffer %u", "Rivale: colpo %u", "Rival: golpe %u", "Rywal: cios %u")
+X(FOE_MISS, 22, "Rival: falla", "Rival: missed", "Rival: rate", "Gegner: verfehlt", "Rivale: manca", "Rival: errou", "Rywal: pudlo")
+X(QUIT_Q, 22, "HUIR DEL COMBATE?", "FLEE THE BATTLE?", "FUIR LE COMBAT?", "KAMPF VERLASSEN?", "FUGGIRE?", "FUGIR DA BATALHA?", "UCIEC Z WALKI?")
+X(QUIT_STAY, 16, "SEGUIR", "KEEP FIGHTING", "CONTINUER", "WEITERKAEMPFEN", "CONTINUA", "CONTINUAR", "WALCZ DALEJ")
+X(RESULT_DRAW, 12, "EMPATE", "DRAW", "NUL", "REMIS", "PARI", "EMPATE", "REMIS")
+X(POINTS_DELTA_FMT, 16, "%+d PTS", "%+d PTS", "%+d PTS", "%+d PKT", "%+d PUNTI", "%+d PTS", "%+d PKT")
+X(LEVEL_UP_FMT, 22, "NUEVO NIVEL %u", "LEVEL UP! LV %u", "NOUVEAU NIVEAU %u", "AUFSTIEG! LV %u", "NUOVO LIVELLO %u", "NOVO NIVEL %u", "AWANS! POZIOM %u")
+X(BADGE_FMT, 22, "INSIGNIA: %s", "BADGE: %s", "BADGE: %s", "ABZEICHEN: %s", "BADGE: %s", "INSIGNIA: %s", "ODZNAKA: %s")
+X(WAIT_CONFIRM, 26, "Confirmando resultado", "Confirming result", "Confirmation...", "Ergebnis wird bestaetigt", "Conferma risultato", "Confirmando resultado", "Czekam na potwierdzenie")
+X(BADGES_TITLE, 14, "INSIGNIAS", "BADGES", "BADGES", "ABZEICHEN", "BADGE", "INSIGNIAS", "ODZNAKI")
+X(BADGES_NONE, 30, "Sin insignias. Gana!", "No badges yet. Win a fight!", "Aucun badge. Gagne!", "Noch keine. Gewinne!", "Nessun badge. Vinci!", "Sem insignias. Ganhe!", "Brak odznak. Wygraj walke!")
+X(BLOCKED_SAME_RIVAL, 28, "Rival reciente: sin pts", "Met recently: no points", "Deja vu: 0 pt", "Gegner kuerzlich: 0 Pkt", "Rivale recente: 0 punti", "Rival recente: sem pts", "Rywal niedawno: brak pkt")
+X(BLOCKED_CLOCK, 28, "Sin reloj: sin pts", "No clock: no points", "Pas d'heure: 0 pt", "Keine Uhr: keine Pkt", "Orologio: 0 punti", "Sem relogio: sem pts", "Brak zegara: brak pkt")
+X(DENY_EGG, 28, "El huevo no puede luchar", "An egg can't fight", "Un oeuf ne combat pas", "Ei kann nicht kaempfen", "Un uovo non combatte", "Ovo nao luta", "Jajo nie moze walczyc")
+X(DENY_CEREMONY, 28, "Espera un momento", "Wait a moment", "Un instant", "Einen Moment", "Un momento", "Um momento", "Poczekaj chwile")
+X(DENY_NO_NICK, 28, "Pon nombre de entrenador", "Set a trainer name first", "Choisis un nom de dresseur", "Trainername fehlt", "Imposta il nome allenatore", "Defina o nome de treinador", "Ustaw nick trenera")

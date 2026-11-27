@@ -17,7 +17,8 @@ void drawPhase(const PvpApp &app, uint32_t now) {
     case PVP_UI_ENDED: pvpUiDrawEnded(app, now); break;
     case PVP_UI_IDLE:
     case PVP_UI_STOPPING: break;  // blank frame while the last packets leave
-    default: pvpUiDrawSoon(app, now); break;  // CHOOSE .. RESULT until the T4.3 screens exist
+    case PVP_UI_RESULT: pvpUiDrawResult(app, now); break;
+    default: pvpUiDrawBattle(app, now); break;  // CHOOSE .. WAIT_FINAL
   }
 }
 
@@ -41,7 +42,8 @@ void pvpAppTap(int16_t x, int16_t y) {
     case PVP_UI_PREPARING: pvpUiTapPreparing(app, x, y, now); break;
     case PVP_UI_ENDED: pvpUiTapEnded(app, x, y, now); break;
     case PVP_UI_STOPPING: break;
-    default: pvpUiTapSoon(app, x, y, now); break;
+    case PVP_UI_RESULT: pvpUiTapResult(app, x, y, now); break;
+    default: pvpUiTapBattle(app, x, y, now); break;
   }
   cardDirty = true;
 }

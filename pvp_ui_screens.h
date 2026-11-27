@@ -21,6 +21,15 @@ void pvpUiTapPreparing(PvpApp &app, int16_t x, int16_t y, uint32_t now);
 void pvpUiDrawEnded(const PvpApp &app, uint32_t now);
 void pvpUiTapEnded(PvpApp &app, int16_t x, int16_t y, uint32_t now);
 
-// T4.2 stand-in for the battle / result phases ("PvP coming soon"); replaced by T4.3 screens.
-void pvpUiDrawSoon(const PvpApp &app, uint32_t now);
-void pvpUiTapSoon(PvpApp &app, int16_t x, int16_t y, uint32_t now);
+// Battle (CHOOSE .. WAIT_FINAL, incl. the quit modal) and result.
+void pvpUiDrawBattle(const PvpApp &app, uint32_t now);
+void pvpUiTapBattle(PvpApp &app, int16_t x, int16_t y, uint32_t now);
+void pvpUiDrawResult(const PvpApp &app, uint32_t now);
+void pvpUiTapResult(PvpApp &app, int16_t x, int16_t y, uint32_t now);
+
+// Badge list: sub-view of card page 10 (pvp_ui_badges.cpp).
+bool pvpBadgesViewOpen();
+void pvpBadgesOpen();
+void pvpBadgesClose();
+void pvpBadgesDraw();
+bool pvpBadgesTap(int16_t x, int16_t y);  // always true while the view is open
