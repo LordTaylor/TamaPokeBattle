@@ -5352,9 +5352,13 @@ void renderGallery() {
   int pages = galleryPageCount();
   int dotX = CX - (pages - 1) * 7;
   for (int i = 0; i < pages; i++) {
-    if (i == galleryPage) gfx->fillCircle(dotX + i * 14, 436, 4, UI_INK);
-    else gfx->drawCircle(dotX + i * 14, 436, 3, UI_INK);
+    if (i == galleryPage) gfx->fillCircle(dotX + i * 14, 420, 4, UI_INK);
+    else gfx->drawCircle(dotX + i * 14, 420, 3, UI_INK);
   }
+  gfx->setTextColor(UI_TRACK);  // visible exit: tap the label (galleryTap bottom zone)
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 436);
+  gfx->print(T(S_BACK));
   flushStampedFrame();
 }
 
@@ -5366,7 +5370,7 @@ void galleryTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
-  if (y < 46) {  // tocar la cabecera = salir
+  if (y < 46 || (y >= 426 && x >= CX - 70 && x <= CX + 70)) {  // header or the bottom BACK label = exit
     galleryOpen = false;
     galleryPmd.unload();
     sfxPlay(SFX_TAP);
