@@ -1,0 +1,52 @@
+// PvP strings: single source of truth (X-macro). Column order = enum Lang: ES EN FR DE IT PT PL.
+// X(id, maxlen, es, en, fr, de, it, pt, pl)
+//   maxlen = longest allowed text on the round screen (formats: %u -> 2 digits, %s -> 10 chars,
+//   checked by tests/i18n_tests.cpp; literals without a format are checked at compile time).
+// ASCII only. A missing column or row is a compile error (wrong macro arity), never a null pointer.
+// Spec: docs/pvp-integration-spec.md, section F.2.
+//
+// --- T4.2: card page, search, challenge, preparation, end / refusal ---
+X(BTN_FIGHT, 20, "COMBATE ENTRENADOR", "TRAINER BATTLE", "COMBAT DRESSEUR", "TRAINERKAMPF", "SFIDA ALLENATORE", "BATALHA TREINADOR", "WALKA Z TRENEREM")
+X(POINTS_FMT, 16, "%u/%u PTS", "%u/%u PTS", "%u/%u PTS", "%u/%u PKT", "%u/%u PUNTI", "%u/%u PTS", "%u/%u PKT")
+X(LEVEL_MAX, 16, "NIVEL MAX", "MAX LEVEL", "NIVEAU MAX", "HOECHSTSTUFE", "LIVELLO MAX", "NIVEL MAX", "POZIOM MAX")
+X(STAT_WINS, 14, "VICTORIAS", "WINS", "VICTOIRES", "SIEGE", "VITTORIE", "VITORIAS", "WYGRANE")
+X(STAT_LOSSES, 14, "DERROTAS", "LOSSES", "DEFAITES", "NIEDERLAGEN", "SCONFITTE", "DERROTAS", "PORAZKI")
+X(STAT_DRAWS, 14, "EMPATES", "DRAWS", "NULS", "REMIS", "PARI", "EMPATES", "REMISY")
+X(NEXT_WILD_FMT, 32, "Pasos al salvaje: %s", "Steps to wild: %s", "Pas avant sauvage: %s", "Schritte bis Wild: %s", "Passi al selvatico: %s", "Passos ate selvagem: %s", "Kroki do dzikiego: %s")
+X(HINT, 44, "El rival tambien debe abrirlo", "Your rival must open this too", "L'adversaire doit l'ouvrir aussi", "Gegner muss das auch oeffnen", "Anche l'avversario deve aprirlo", "O rival tambem deve abrir isto", "Rywal tez musi otworzyc ten ekran")
+X(UNAVAILABLE, 44, "No disponible ahora", "Not available now", "Indisponible", "Gerade nicht moeglich", "Non disponibile", "Indisponivel agora", "Niedostepne teraz")
+X(LOW_BATTERY, 44, "Bateria baja", "Battery low", "Batterie faible", "Akku schwach", "Batteria scarica", "Bateria fraca", "Slaba bateria")
+X(ASLEEP, 28, "El Pokemon duerme", "Pokemon is asleep", "Le Pokemon dort", "Pokemon schlaeft", "Il Pokemon dorme", "O Pokemon dorme", "Pokemon spi")
+X(SEARCHING, 20, "BUSCANDO RIVALES", "FINDING TRAINERS", "CHERCHE DRESSEURS", "SUCHE TRAINER", "CERCO ALLENATORI", "PROCURA TREINADORES", "SZUKAM TRENEROW")
+X(NONE_NEARBY, 28, "Nadie cerca", "Nobody nearby", "Personne a proximite", "Niemand in der Naehe", "Nessuno vicino", "Ninguem por perto", "Nikogo w poblizu")
+X(CANCEL, 12, "CANCELAR", "CANCEL", "ANNULER", "ABBRECHEN", "ANNULLA", "CANCELAR", "ANULUJ")
+X(RADIO_FAIL, 28, "Error de radio", "Radio error", "Erreur radio", "Funkfehler", "Errore radio", "Erro de radio", "Brak lacznosci")
+X(CHALLENGING_FMT, 26, "Retando a %s", "Challenging %s", "Defi a %s", "Fordere %s heraus", "Sfido %s", "Desafiando %s", "Wyzwanie dla %s")
+X(WAITING_REPLY, 22, "Esperando respuesta", "Waiting for reply", "Attente reponse", "Warte auf Antwort", "Attendo risposta", "Aguardando resposta", "Czekam na odpowiedz")
+X(CHALLENGE_Q, 18, "RETO!", "CHALLENGE!", "DEFI!", "HERAUSFORDERUNG!", "SFIDA!", "DESAFIO!", "WYZWANIE!")
+X(ACCEPT, 12, "ACEPTAR", "ACCEPT", "ACCEPTER", "ANNEHMEN", "ACCETTA", "ACEITAR", "PRZYJMIJ")
+X(DECLINE, 12, "RECHAZAR", "DECLINE", "REFUSER", "ABLEHNEN", "RIFIUTA", "RECUSAR", "ODRZUC")
+X(DECLINED_MSG, 22, "Rechazado", "Declined", "Refuse", "Abgelehnt", "Rifiutato", "Recusado", "Rywal odrzucil")
+X(EXPIRED, 22, "Reto caducado", "Challenge expired", "Defi expire", "Zeit abgelaufen", "Sfida scaduta", "Desafio expirou", "Wyzwanie wygaslo")
+X(PREPARING, 28, "Preparando combate", "Preparing battle", "Preparation du combat", "Kampf wird vorbereitet", "Preparo la sfida", "Preparando batalha", "Przygotowanie walki")
+X(QUIT_PENALTY_FMT, 26, "Castigo: -%u pto para ti", "Penalty: -%u pt for you", "Penalite: -%u pt pour toi", "Strafe: -%u Pkt fuer dich", "Penalita: -%u pt per te", "Penalidade: -%u pt para ti", "Kara: -%u pkt dla Ciebie")
+X(ABORTED_TITLE, 24, "COMBATE CANCELADO", "BATTLE STOPPED", "COMBAT INTERROMPU", "KAMPF ABGEBROCHEN", "SFIDA INTERROTTA", "BATALHA INTERROMPIDA", "WALKA PRZERWANA")
+X(NO_POINTS, 22, "Sin puntos", "No points", "Pas de points", "Keine Punkte", "Nessun punto", "Sem pontos", "Brak punktow")
+X(ABORT_PEER_QUIT, 26, "El rival huyo", "Rival ran away", "L'adversaire a fui", "Gegner floh", "Il rivale e fuggito", "O rival fugiu", "Rywal uciekl")
+X(ABORT_YOU_QUIT, 26, "Huida del combate", "Fled the battle", "Fuite du combat", "Flucht aus dem Kampf", "Fuga dalla sfida", "Fuga da batalha", "Ucieczka z walki")
+X(ABORT_LINK, 26, "Conexion perdida", "Connection lost", "Connexion perdue", "Verbindung verloren", "Connessione persa", "Conexao perdida", "Utracono lacznosc")
+X(NO_REPLY, 22, "Sin respuesta", "No reply", "Pas de reponse", "Keine Antwort", "Nessuna risposta", "Sem resposta", "Brak odpowiedzi")
+X(TRAINER_LABEL, 12, "ENTRENADOR", "TRAINER", "DRESSEUR", "TRAINER", "ALLENATORE", "TREINADOR", "TRENER")
+X(WILD_WAITING, 24, "Salvaje espera!", "Wild waiting!", "Sauvage attend!", "Wild wartet!", "Selvatico attende!", "Selvagem espera!", "Dziki czeka!")
+X(ABORT_UPDATE, 26, "Actualizad el juego", "Update the game", "Mettez le jeu a jour", "Spiel aktualisieren", "Aggiornate il gioco", "Atualizem o jogo", "Zaktualizujcie gre")
+X(ABORT_GENERIC, 26, "Algo salio mal", "Something went wrong", "Un probleme est survenu", "Etwas ging schief", "Qualcosa e andato storto", "Algo deu errado", "Cos poszlo nie tak")
+X(TRY_AGAIN, 26, "Probad de nuevo", "Try again", "Reessayez", "Versucht es nochmal", "Riprovate", "Tentem de novo", "Sprobujcie ponownie")
+X(NEAR_HINT, 26, "Acercaos mas", "Move closer", "Rapprochez-vous", "Geht naeher ran", "Avvicinatevi", "Cheguem mais perto", "Stancie blizej")
+X(BADGES_COUNT_FMT, 16, "INSIGNIAS: %u", "BADGES: %u", "BADGES: %u", "ABZEICHEN: %u", "BADGE: %u", "INSIGNIAS: %u", "ODZNAKI: %u")
+X(SOON, 22, "PvP pronto", "PvP coming soon", "PvP bientot", "PvP bald", "PvP in arrivo", "PvP em breve", "PvP wkrotce")
+X(IDLE_EXIT, 28, "Busqueda terminada", "Search ended", "Recherche terminee", "Suche beendet", "Ricerca terminata", "Busca encerrada", "Koniec wyszukiwania")
+// --- T4.3 (battle, result, badges) goes below; add rows here, never to StrId in i18n.h ---
+// Planned keys (texts in spec F.2): WAIT_OPP, REST_NOTE, AUTO_ATTACK, FOE_HIT_FMT, FOE_MISS, QUIT_Q,
+// QUIT_STAY, RESULT_DRAW, POINTS_DELTA_FMT, LEVEL_UP_FMT, BADGE_FMT, WAIT_CONFIRM, BADGES_TITLE,
+// BADGES_NONE, BLOCKED_SAME_RIVAL, BLOCKED_CLOCK.
+// STARTING ("Starting radio") from F.2 is left out on purpose: the radio starts synchronously, no screen shows it.
