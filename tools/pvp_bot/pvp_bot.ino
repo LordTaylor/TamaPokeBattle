@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr int16_t BOT_DEX = 4;                // Charmander
+constexpr int16_t BOT_DEX = 1;                // Bulbasaur
 constexpr uint8_t BOT_LEVEL = 2;
 constexpr char BOT_NICK[] = "BOTEK";
 constexpr uint8_t BOT_TRAINER_LEVEL = 1;
