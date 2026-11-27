@@ -45,12 +45,12 @@ build/battle_tests.o: battle_tests.cpp ../battle.h | build
 build/battle.o: ../battle.cpp ../battle.h | build
 	$(CXX) $(CXXFLAGS) -c ../battle.cpp -o $@
 
-I18N_TEST_OBJS = build/i18n_tests.o build/i18n.o
+I18N_TEST_OBJS = build/i18n_tests.o build/i18n.o build/pvp_strings.o
 
 build/i18n_tests: $(I18N_TEST_OBJS)
 	$(CXX) $(CXXFLAGS) $(I18N_TEST_OBJS) -o $@
 
-build/i18n_tests.o: i18n_tests.cpp ../i18n.h ../pet.h | build
+build/i18n_tests.o: i18n_tests.cpp ../i18n.h ../pet.h ../pvp_strings.h | build
 	$(CXX) $(CXXFLAGS) -c i18n_tests.cpp -o $@
 
 build/i18n.o: ../i18n.cpp ../i18n.h ../dex.h ../pet.h ../trainer.h | build
@@ -199,3 +199,25 @@ test: pvp-core-test
 
 # T4.1 review fixes: headers split out of pvp_pump.h / pvp_validator.h / pvp_profile.h
 build/pvp_validator.o build/pvp_match.o build/pvp_pump.o build/pvp_app.o build/pvp_app_events.o build/pvp_badges.o build/pvp_validator_tests.o build/pvp_match_tests.o build/pvp_badges_tests.o build/pvp_app_tests.o: ../pvp_event_sink.h ../pvp_stat_range.h ../pvp_deny_reason.h
+
+# --- PvP strings (X-macro) and round-screen text helpers (T4.2 UI) ---
+build/pvp_strings.o: ../pvp_strings.cpp ../pvp_strings.h ../pvp_strings.def ../i18n.h | build
+	$(CXX) $(CXXFLAGS) -c ../pvp_strings.cpp -o $@
+
+PVP_UI_TEXT_TEST_OBJS = build/pvp_ui_text_tests.o build/pvp_ui_text.o
+
+.PHONY: pvp-ui-text-test
+
+pvp-ui-text-test: build/pvp_ui_text_tests
+	./build/pvp_ui_text_tests
+
+build/pvp_ui_text_tests: $(PVP_UI_TEXT_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_UI_TEXT_TEST_OBJS) -o $@
+
+build/pvp_ui_text_tests.o: pvp_ui_text_tests.cpp ../pvp_ui_text.h | build
+	$(CXX) $(CXXFLAGS) -c pvp_ui_text_tests.cpp -o $@
+
+build/pvp_ui_text.o: ../pvp_ui_text.cpp ../pvp_ui_text.h ../pvp_ui_theme.h ../species.h | build
+	$(CXX) $(CXXFLAGS) -c ../pvp_ui_text.cpp -o $@
+
+test: pvp-ui-text-test
