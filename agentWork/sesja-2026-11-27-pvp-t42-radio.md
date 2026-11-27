@@ -5,7 +5,7 @@ AKTUALIZACJA: 2026-11-27
 ---
 
 ## Punkt wznowienia
-Po raporcie agenta UI (worktree, dziennik agentWork/a-pvp-ui-t42.md): zintegrowac pvp_ui_*, dopisac pvp_app_instance.cpp i haki A.4 w TamaPoke.ino, build + test z botem na N16R8.
+Test UI na plytce, potem review Opus calosci i PR. (Dawny punkt: po raporcie agenta UI (worktree, dziennik agentWork/a-pvp-ui-t42.md): zintegrowac pvp_ui_*, dopisac pvp_app_instance.cpp i haki A.4 w TamaPoke.ino, build + test z botem na N16R8.
 
 ## Stan pracy
 [x] pvp_espnow_link.h/.cpp (transport wg spec B)
@@ -14,9 +14,10 @@ Po raporcie agenta UI (worktree, dziennik agentWork/a-pvp-ui-t42.md): zintegrowa
 [x] test sprzetowy radia: pelna walka 18 rund Waveshare(bot) <-> N16R8(bot): wyniki komplementarne (W=0, N=2), brak desync, obie strony wrocily do SEARCHING
 [x] review Opus transportu (agentWork/review-t42-link.md): brak blokujacych; poprawione: atomowy gInFlight, kontrola set_channel, sciezka OUT w build_pvp_bot.sh, tempo bota
 [ ] DO ZROBIENIA z review: esp_now_del_peer przy koncu sesji (niekrytyczne), canFight tez przy wyzwaniu, +77 KB flash/+4.5 KB DRAM w release dopiero z hakami (merge razem z hakami A.4), test sprzetowy kary za ucieczke/forceStop/NVS w walce
-[~] agent UI (pvp_strings, pvp_ui_*) w toku
-[ ] pvp_app_instance.cpp, haki w TamaPoke.ino, CARD_COUNT 10
-[ ] build release + test sprzetowy UI z botem, review Opus, PR
+[x] agent UI (pvp_strings 39 kluczy x 7 jezykow, pvp_ui_*; mutacje 9/9) zmergowany do branchu
+[x] pvp_app_instance.cpp + haki A.4 w TamaPoke.ino, CARD_COUNT 10 (commit d74e5da); make test zielony; release 1.40 MB flash, DRAM 62 KB
+[~] test sprzetowy UI z botem (Jarek: dotyk, strona karty 10 -> wyzwanie Botek); wymaga pelnego cyklu zasilania Waveshare (SD)
+[ ] review Opus calosci, PR
 
 ## Decyzje
 - D1-D11 wg rekomendacji specu (Jarek: "pomiary 1-plytkowe + D1-D11 wg rekomendacji")
