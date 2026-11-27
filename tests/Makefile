@@ -116,3 +116,25 @@ build/pvpbat/battle.o: ../battle.cpp ../battle_core.h ../battle.h | build/pvpbat
 
 test: pvp-battle-test
 build/battle.o: ../battle_core.h
+
+# PvP radio-callback boundary filter (pure header + serializer for real packets)
+PVP_IN_PACKET_OBJS = build/pvpin/pvp_in_packet_tests.o build/pvpin/pvp_packet.o
+
+.PHONY: pvp-in-packet-test
+
+pvp-in-packet-test: build/pvp_in_packet_tests
+	./build/pvp_in_packet_tests
+
+build/pvpin:
+	mkdir -p build/pvpin
+
+build/pvp_in_packet_tests: $(PVP_IN_PACKET_OBJS)
+	$(CXX) $(CXXFLAGS) $(PVP_IN_PACKET_OBJS) -o $@
+
+build/pvpin/pvp_in_packet_tests.o: pvp_in_packet_tests.cpp pvp_test_harness.h ../pvp_in_packet.h $(PVP_HEADERS) | build/pvpin
+	$(CXX) $(CXXFLAGS) -c pvp_in_packet_tests.cpp -o $@
+
+build/pvpin/pvp_packet.o: ../pvp_packet.cpp $(PVP_HEADERS) | build/pvpin
+	$(CXX) $(CXXFLAGS) -c ../pvp_packet.cpp -o $@
+
+test: pvp-in-packet-test

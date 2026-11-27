@@ -63,3 +63,7 @@ constexpr uint8_t PVP_EVENT_QUEUE = 16;
 constexpr uint8_t PVP_FIRE_COPIES = 3;      // copies of unacknowledged ABORT/DECLINE/BYE
 constexpr uint8_t PVP_SEQ_WINDOW = 32;
 constexpr uint8_t PVP_LUCK_MOD = 100;
+
+// --- Transport (ESP-NOW) ---
+constexpr uint8_t PVP_WIFI_CHANNEL = 1;       // fixed channel for both devices, set after every WiFi start
+constexpr uint8_t PVP_RX_QUEUE_LEN = 16;      // static receive queue (callback only copies packets into it)
