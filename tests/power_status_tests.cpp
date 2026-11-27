@@ -24,6 +24,15 @@ int main() {
   check(powerChipKey(250, POWER_BATTERY) == powerChipKey(100, POWER_BATTERY), "percent clamped high");
   check(powerChipKey(-5, POWER_NO_BATTERY) == powerChipKey(0, POWER_NO_BATTERY), "percent clamped low");
 
+  check(lipoPercentFromMv(4203) == 100, "4.2V is full");
+  check(lipoPercentFromMv(3300) == 0 && lipoPercentFromMv(3000) == 0, "empty clamp");
+  check(lipoPercentFromMv(3750) == 45, "interpolation between points");
+  check(lipoPercentFromMv(4150) == 96, "interpolation near full");
+  check(resolveBatteryPercent(-1, 4200) == -1, "no battery stays -1");
+  check(resolveBatteryPercent(0, 4203) == 100, "gauge 0 at 4.2V falls back to voltage");
+  check(resolveBatteryPercent(0, 3300) == 0, "gauge 0 at empty voltage stays 0");
+  check(resolveBatteryPercent(64, 3000) == 64, "valid gauge value is trusted");
+
   if (failures) return 1;
   std::printf("power status tests: OK\n");
   return 0;
