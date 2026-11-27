@@ -21,6 +21,7 @@
 #include "pet.h"
 #include "sdmon.h"
 #include "rtcbat.h"
+#include "pvp_ui.h"
 #include "i18n.h"
 #include "audio.h"
 #include "battle.h"
@@ -92,8 +93,8 @@ bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
 uint8_t kbTarget = 0;  // 0 = imie stworka, 1 = nick trenera (PvP)
-#define CARD_COUNT 9
-uint8_t cardPage = 0;         // 0 perfil ... 7 expedicion, 8 pasos/trail
+#define CARD_COUNT 10
+uint8_t cardPage = 0;         // 0 perfil ... 7 expedicion, 8 pasos/trail, 9 walka PvP
 uint8_t boxPage = 0;
 uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
 bool expeditionTrainChoiceOpen = false;
@@ -467,6 +468,7 @@ void maybePlayAmbientSound(uint32_t now) {
 
 uint16_t renderIntervalMs() {
   if (screenOff) return 5000;
+  if (pvpAppActive()) return pvpAppRenderIntervalMs();
   if (battleOpen) return battleResolved ? 320 : 190;
   if (gameOpen || sackOpen) return 115;
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
@@ -477,6 +479,7 @@ uint16_t renderIntervalMs() {
 }
 
 bool lightSleepAllowed(uint32_t now) {
+  if (pvpAppRadioOn()) return false;  // radio never enters light sleep
   if (!powerSave || usbPresent() || audioBusy() || Serial.available()) return false;
   if (!screenOff && dimStage == 0) return false;
   if (!screenOff && now - lastInteract < 1500UL) return false;
@@ -539,6 +542,12 @@ void loop() {
   maybeAskTrainerName();
   handleTouch();
   handleSerial();
+  pvpAppUpdate(now);
+  if (pvpAppActive()) {
+    cardDirty = true;
+    if (pvpAppKeepAwake()) lastInteract = now;
+  }
+  if (!cardOpen && pvpAppRadioOn()) pvpAppForceStop(now);  // card closed by another path
   ensureMon();
   setPowerCacheInterval(powerSave ? 10000UL : 2000UL);
   pet.ensureDailyGoals();
@@ -558,7 +567,7 @@ void loop() {
   if (walked) {
     pet.applyWalk(walked, rtcEpoch());
     trackStepEncounter(walked);
-    if (cardOpen && cardPage == 7) cardDirty = true;
+    if (cardOpen && (cardPage == 7 || cardPage == 9)) cardDirty = true;
   }
   if ((pet.stepsToday != stepsBefore || pet.stepDay != stepDayBefore) &&
       cardOpen && cardPage == 8) cardDirty = true;
@@ -597,7 +606,7 @@ void loop() {
   static uint32_t lastPwr = 0;
   if (now - lastPwr > 250) {
     lastPwr = now;
-    if (pwrShortPressed()) {
+    if (pwrShortPressed() && !pvpAppKeepAwake()) {  // PWR does not blank the screen in a PvP fight
       bool wasOff = screenOff;
       screenOff = !screenOff;
       if (!screenOff) {
@@ -618,7 +627,7 @@ void loop() {
   // y aqui no hay animacion que se corte ni dedo esperando respuesta. Con 90s
   // de inactividad la pantalla ya atenua, asi que se vuelca enseguida; el uso
   // activo persiste igual por los guardados de cada accion (comer/jugar/...).
-  if (pet.savePending() && (screenOff || dimStage >= 1 || pet.sleeping)) {
+  if (pet.savePending() && !pvpAppActive() && (screenOff || dimStage >= 1 || pet.sleeping)) {
     pet.flushSave();
   }
 
@@ -1100,6 +1109,8 @@ void onSwipeV(int dir) {
   if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
   if (clockOpen) { clockOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); return; }
   if (cardOpen) {
+    if (pvpAppActive()) { pvpAppSwipeV(dir); return; }
+    pvpCardResetSub();
     if (dir < 0) { cardOpen = false; expeditionTrainChoiceOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); }  // arriba cierra la ficha
     return;
   }
@@ -1128,10 +1139,11 @@ void onSwipe(int dir) {
   if (gameMenuOpen) return;
   if (gameOpen || kbOpen || clockOpen || battleOpen) return;
   if (cardOpen) {  // dentro de la ficha: cambiar paginas
+    if (pvpAppActive()) { pvpAppSwipe(dir); return; }
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
     uint8_t old = cardPage;
-    cardPage = p < 0 ? 0 : (p >= CARD_COUNT ? CARD_COUNT - 1 : p);
-    if (cardPage != old) { expeditionTrainChoiceOpen = false; cardDirty = true; sfxPlay(SFX_MENU); }
+    cardPage = (uint8_t)((p + CARD_COUNT) % CARD_COUNT);  // wraps in both directions
+    if (cardPage != old) { pvpCardResetSub(); expeditionTrainChoiceOpen = false; cardDirty = true; sfxPlay(SFX_MENU); }
     return;
   }
   if (!galleryOpen) {
@@ -1248,6 +1260,7 @@ void onTap(int16_t x, int16_t y) {
   }
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
+    if (pvpAppActive()) { pvpAppTap(x, y); return; }
     if (cardPage == 0 && inProfilePetPortrait(x, y)) {
       speciesChirpPlay(pet.speciesId, true);
     }
@@ -1309,6 +1322,8 @@ void onTap(int16_t x, int16_t y) {
       startSack();
     } else if (cardPage == 7) {
       expeditionCardTap(x, y);
+    } else if (cardPage == 9 && pvpCardTap(x, y)) {
+      // handled by the PvP card page
     } else if (y >= 400) {
       cardOpen = false;
       markUiDirty();
@@ -4971,6 +4986,7 @@ void expeditionCardTap(int16_t x, int16_t y) {
 }
 
 void renderCard() {
+  if (pvpAppActive()) { renderPvpApp(); return; }
   cardDirty = false;
   gfx->fillScreen(UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
@@ -4981,7 +4997,8 @@ void renderCard() {
   else if (cardPage == 5) renderCardMedals();
   else if (cardPage == 6) renderCardProgress();
   else if (cardPage == 7) renderCardExpedition();
-  else renderCardSteps();
+  else if (cardPage == 8) renderCardSteps();
+  else renderCardPvp();
 
   // indicador de paginas + ayuda
   int dotsX = CX - ((CARD_COUNT - 1) * 24) / 2;
