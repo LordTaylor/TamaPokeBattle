@@ -2,9 +2,11 @@
 #include <stdio.h>
 
 #include "pvp_app.h"
+#include "pvp_time.h"
 #include "pvp_ui_bridge.h"
 #include "pvp_strings.h"
 #include "pvp_ui_draw.h"
+#include "pvp_ui_phase.h"
 #include "pvp_ui_screens.h"
 #include "pvp_ui_theme.h"
 
@@ -41,6 +43,10 @@ void drawOk(bool ready, uint32_t now) {
                 label);
 }
 
+bool okReady(const PvpApp &app, uint32_t now) {
+  return app.canLeaveNow(now) && pvpElapsed(now, pvpUiPhaseSinceMs(), PVP_RESULT_LOCK_MS);
+}
+
 bool tapOk(int16_t x, int16_t y) { return pvpHit(x, y, END_OK_X0, END_OK_Y0, END_OK_X1, END_OK_Y1); }
 
 }  // namespace
@@ -64,11 +70,11 @@ void pvpUiDrawEnded(const PvpApp &app, uint32_t now) {
     snprintf(line, sizeof(line), TP(PVP_S_QUIT_PENALTY_FMT), (unsigned)PVP_QUIT_PENALTY);
     pvpDrawCentered(line, END_PENALTY_Y, 2, COL_BAD);
   }
-  drawOk(app.canLeaveNow(now), now);
+  drawOk(okReady(app, now), now);
 }
 
 void pvpUiTapEnded(PvpApp &app, int16_t x, int16_t y, uint32_t now) {
-  if (!tapOk(x, y) || !app.canLeaveNow(now)) return;
+  if (!tapOk(x, y) || !okReady(app, now)) return;
   sfxPlay(SFX_TAP);
   app.leave(now);
 }

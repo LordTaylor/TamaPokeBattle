@@ -8,6 +8,7 @@
 #include "pvp_ui_battle_parts.h"
 #include "pvp_ui_bridge.h"
 #include "pvp_ui_draw.h"
+#include "pvp_ui_phase.h"
 #include "pvp_ui_screens.h"
 #include "pvp_ui_theme.h"
 
@@ -111,10 +112,13 @@ void drawButtons(const PvpApp &app, uint16_t ink) {
   }
 }
 
+constexpr uint32_t CHOOSE_TAP_LOCK_MS = 400;  // local guard after entering CHOOSE (spec E.2 lock is 250 ms on the core side)
+
 bool tapAction(PvpApp &app, int16_t x, int16_t y, uint32_t now) {
   for (const ActionButton &b : BUTTONS) {
     if (!pvpHit(x, y, b.x, b.y, b.x + b.w, b.y + b.h)) continue;
     if (app.model().phase != PVP_UI_CHOOSE) return true;  // chosen already: ignored quietly
+    if (!pvpElapsed(now, pvpUiPhaseSinceMs(), CHOOSE_TAP_LOCK_MS)) return true;  // a stray tap from the last round
     if (b.action == BATTLE_REST && restLeft(app) == 0) {
       noRestUntil = now + BATTLE_NOTE_MS;  // a REST without uses would only turn into a DODGE
       sfxPlay(SFX_DENY);
@@ -132,8 +136,8 @@ void pvpUiDrawBattle(const PvpApp &app, uint32_t now) {
   uint16_t ink = pvpBattleInk();
   drawGameScene();
   pvpBattleDrawHeader(app, now, ink);
-  pvpBattleDrawSides(app, now, ink);
   pvpBattleDrawSprites(app, now);
+  pvpBattleDrawSides(app, now, ink);
   PvpPhase phase = app.model().phase;
   bool quit = pvpQuitOpen(app);
   if (battlePhase(phase))

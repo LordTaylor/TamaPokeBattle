@@ -88,12 +88,12 @@ void pvpUiDrawResult(const PvpApp &app, uint32_t now) {
   }
   drawRounds(app);
   bool ready = okReady(app, now);
-  pvpDrawButton(END_OK_X0, RESULT_OK_Y0, END_OK_X1, RESULT_OK_Y1, ready ? COL_OK : COL_MUTED, ready ? COL_BG : COL_INK,
+  pvpDrawButton(RESULT_OK_X0, RESULT_OK_Y0, RESULT_OK_X1, RESULT_OK_Y1, ready ? COL_OK : COL_MUTED, ready ? COL_BG : COL_INK,
                 ready ? T(S_OK) : pvpDots(now));
 }
 
 void pvpUiTapResult(PvpApp &app, int16_t x, int16_t y, uint32_t now) {
-  if (!pvpHit(x, y, END_OK_X0, RESULT_OK_Y0, END_OK_X1, RESULT_OK_Y1) || !okReady(app, now)) return;
+  if (!pvpHit(x, y, RESULT_OK_X0, RESULT_OK_Y0, RESULT_OK_X1, RESULT_OK_Y1) || !okReady(app, now)) return;
   sfxPlay(SFX_TAP);
   app.leave(now);
 }

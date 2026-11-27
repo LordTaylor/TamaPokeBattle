@@ -35,3 +35,10 @@ Test UI na plytce, potem review Opus calosci i PR. (Dawny punkt: po raporcie age
 - B2: gitlinki .claude/worktrees w repo -> usuniete z indeksu, .gitignore
 - Niekrytyczne do zrobienia: render STOPPING (pusta klatka 200 ms), konkretne powody odmowy (T4.3), testGeom/testCenter w pvp_ui_text_tests (testy ukladu - usunac), pelne save() od ensureDailyGoals w trakcie PvP
 - T4.3: agent aea0f4e9c798cdabb w toku (worktree), dziennik agentWork/a-pvp-ui-t43.md
+
+## Etap: T4.3 + końcowe review Opus (2026-11-27)
+- Review Opus: brak blokerów kodu; poprawki N1 (sprite'y przed paskami HP), N2 (blokada tapnięć na ENDED), N3 (400 ms blokady po wejściu w CHOOSE), N5 (przycisk OK wyniku w obrębie koła) wdrożone; usunięte testy układu (testChordTable, testCenter).
+- Testy hostowe: `make clean && make test` exit 0. Release skompilowany (build9) i wgrany na Waveshare (0x10000).
+- Worktree agentów usunięte, gałęzie worktree-agent-* skasowane.
+- Otwarte: N4 (PVP_ROUND_LOCK_MS 250 vs PVP_RESULT_LOCK_MS 800 - udokumentować), weryfikacja na ekranie (dotyk, geometria, dźwięk, SD podczas radia).
+- Punkt wznowienia: Jarek robi power-cycle Waveshare (PWR ~4 s), testuje PvP vs BOTEK (karta 10); PR nie jest mergowany do jego potwierdzenia.

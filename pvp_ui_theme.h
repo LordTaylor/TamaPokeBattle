@@ -213,8 +213,10 @@ constexpr int RESULT_BAR_Y = 204;
 constexpr int RESULT_BAR_H = 12;
 constexpr int RESULT_BADGE_Y = 240;
 constexpr int RESULT_STATS_Y = 290;
-constexpr int RESULT_OK_Y0 = 396;
-constexpr int RESULT_OK_Y1 = 448;
+constexpr int RESULT_OK_Y0 = 380;   // whole button inside the round panel (corner distance < R)
+constexpr int RESULT_OK_Y1 = 430;
+constexpr int RESULT_OK_X0 = 150;
+constexpr int RESULT_OK_X1 = 316;
 
 // --- Badges sub-view (C.9) ---
 constexpr int BADGES_TITLE_Y = 44;
