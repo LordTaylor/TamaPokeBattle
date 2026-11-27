@@ -21,6 +21,7 @@
 #include "pet.h"
 #include "sdmon.h"
 #include "rtcbat.h"
+#include "power_status.h"
 #include "i18n.h"
 #include "audio.h"
 #include "battle.h"
@@ -215,6 +216,7 @@ bool mainScreenReadyForShake();
 void maybeOfferMorning(uint32_t now);
 uint32_t pmdActTotalMs(const PmdAct &a);
 bool watermarkNeedsRedraw();
+bool overlayNeedsRedraw();
 void flushStampedFrame();
 void startBattleWith(int16_t forcedDex, uint8_t forcedLevel, int8_t forcedShiny = -1);
 void startBattle();
@@ -347,7 +349,7 @@ const char *screenName() {
 }
 
 bool staticScreenClean() {
-  if (watermarkNeedsRedraw()) return false;
+  if (overlayNeedsRedraw()) return false;
   if (kbOpen) return !keyboardDirty;
   if (pet.awaitingStarter()) return !starterDirty;
   if (galleryOpen && !galleryDetail) return !galleryDirty;
@@ -1543,10 +1545,65 @@ static void drawWatermark(uint8_t slot) {
   }
 }
 
+// Nakladka zasilania: rysowana w flushStampedFrame, czyli na kazdym ekranie.
+static const int POWER_CHIP_W = 92;
+static const int POWER_CHIP_H = 16;
+static const int POWER_CHIP_Y = 7;  // gorny brzeg okraglego wyswietlacza: szerokosc ograniczona
+static const int POWER_ICON_W = 20;
+static const int POWER_ICON_H = 10;
+static const int POWER_LOW_PCT = 15;
+static const int POWER_OK_PCT = 40;
+static int32_t powerChipDrawnKey = -1;
+
+static PowerState currentPowerState() {
+  return powerStateOf(batPercent(), batCharging(), usbPresent());
+}
+
+static int32_t currentPowerChipKey() {
+  return powerChipKey(batPercent(), currentPowerState());
+}
+
+bool powerChipNeedsRedraw() {
+  return !screenOff && currentPowerChipKey() != powerChipDrawnKey;
+}
+
+bool overlayNeedsRedraw() {
+  return watermarkNeedsRedraw() || powerChipNeedsRedraw();
+}
+
+static void drawPowerChip() {
+  powerChipDrawnKey = currentPowerChipKey();
+  PowerState state = currentPowerState();
+  if (state == POWER_NO_BATTERY) return;
+  int pc = constrain(batPercent(), 0, 100);
+  uint16_t col = state != POWER_BATTERY ? UI_BAR_OK
+                 : (pc >= POWER_OK_PCT) ? UI_INK
+                 : (pc >= POWER_LOW_PCT) ? UI_BAR_WARN
+                                         : UI_BAR_BAD;
+  StrId labelId = state == POWER_CHARGING ? S_PWR_CHG
+                  : state == POWER_USB ? S_PWR_USB
+                                       : S_PWR_BAT;
+  int x = CX - POWER_CHIP_W / 2, y = POWER_CHIP_Y;
+  gfx->fillRoundRect(x, y, POWER_CHIP_W, POWER_CHIP_H, 8, UI_WHITE);
+  gfx->drawRoundRect(x, y, POWER_CHIP_W, POWER_CHIP_H, 8, col);
+  int ix = x + 6, iy = y + (POWER_CHIP_H - POWER_ICON_H) / 2;
+  gfx->drawRoundRect(ix, iy, POWER_ICON_W, POWER_ICON_H, 2, UI_INK);
+  gfx->fillRect(ix + POWER_ICON_W, iy + 3, 2, POWER_ICON_H - 6, UI_INK);  // borne
+  int fw = (POWER_ICON_W - 4) * pc / 100;
+  if (fw > 0) gfx->fillRect(ix + 2, iy + 2, fw, POWER_ICON_H - 4, col);
+  char label[16];
+  snprintf(label, sizeof(label), "%d%% %s", pc, T(labelId));
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(ix + POWER_ICON_W + 8, y + 4);
+  gfx->print(label);
+}
+
 void flushStampedFrame() {
   uint8_t slot = watermarkSlot();
   drawWatermark(slot);
   watermarkDrawnSlot = (int8_t)slot;
+  drawPowerChip();
   gfx->flush();
 }
 
@@ -1708,7 +1765,7 @@ void renderStarterSelect() {
 }
 
 void render() {
-  if (watermarkNeedsRedraw()) {
+  if (overlayNeedsRedraw()) {
     starterDirty = true;
     cardDirty = true;
     clockDirty = true;
@@ -5321,31 +5378,7 @@ void galleryTap(int16_t x, int16_t y) {
   if (pet.isRegistered(dex) || pet.isCaught(dex)) speciesChirpPlay(dex);
 }
 
-void drawBattery() {
-  int pc = batPercent();
-  if (pc < 0) return;  // sin bateria conectada
-  int x = CX - 14, y = 12, w = 24, h = 11;
-  bool charging = batCharging();
-  uint16_t col = charging ? UI_BAR_OK
-                 : (pc >= 40) ? inkColor()
-                 : (pc >= 15) ? UI_BAR_WARN
-                              : UI_BAR_BAD;
-  gfx->drawRoundRect(x, y, w, h, 2, col);
-  gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
-  if (charging) {
-    // rayo de carga (zigzag) en vez de la barra de nivel
-    uint16_t bolt = C565(0xff, 0xd9, 0x4a);
-    int bx = x + w / 2;
-    gfx->fillTriangle(bx + 3, y + 1, bx - 4, y + 6, bx + 1, y + 6, bolt);
-    gfx->fillTriangle(bx - 1, y + 5, bx + 4, y + 5, bx - 3, y + 10, bolt);
-  } else {
-    int fw = (w - 4) * pc / 100;
-    if (fw > 0) gfx->fillRect(x + 2, y + 2, fw, h - 4, col);
-  }
-}
-
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
-  drawBattery();
   gfx->setTextColor(nameColor);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(name) * 9, 52);

@@ -6,11 +6,12 @@ BATTLE_TEST_OBJS = build/battle_tests.o build/battle.o
 
 .PHONY: test web-test clean
 
-test: build/pet_tests build/battle_tests build/i18n_tests build/trainer_tests web-test
+test: build/pet_tests build/battle_tests build/i18n_tests build/trainer_tests build/power_status_tests web-test
 	./build/pet_tests
 	./build/battle_tests
 	./build/i18n_tests
 	./build/trainer_tests
+	./build/power_status_tests
 
 web-test:
 	node web_serial_tests.mjs
@@ -199,3 +200,6 @@ test: pvp-core-test
 
 # T4.1 review fixes: headers split out of pvp_pump.h / pvp_validator.h / pvp_profile.h
 build/pvp_validator.o build/pvp_match.o build/pvp_pump.o build/pvp_app.o build/pvp_app_events.o build/pvp_badges.o build/pvp_validator_tests.o build/pvp_match_tests.o build/pvp_badges_tests.o build/pvp_app_tests.o: ../pvp_event_sink.h ../pvp_stat_range.h ../pvp_deny_reason.h
+
+build/power_status_tests: power_status_tests.cpp ../power_status.h | build
+	$(CXX) $(CXXFLAGS) power_status_tests.cpp -o $@

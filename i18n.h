@@ -95,6 +95,8 @@ enum StrId : uint8_t {
   S_EXP_WALK_PROGRESS, S_EXP_WALK_EARNED,
   S_EVO_NEED_BOND,
   S_TRAINER_NAME,
+  // nakladka zasilania (max. 4 znaki ASCII)
+  S_PWR_CHG, S_PWR_USB, S_PWR_BAT,
   STR_COUNT
 };
 

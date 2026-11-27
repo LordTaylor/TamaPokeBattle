@@ -80,13 +80,18 @@ static uint32_t powerCacheT = 0;
 static uint32_t powerCacheMs = 2000;
 static int cachedPct = -1;
 static bool cachedCharging = false, cachedUsb = true;
+static bool batMissed = false;
 
 static void refreshPower() {
   uint32_t now = millis();
   if (powerCacheT && now - powerCacheT < powerCacheMs) return;
   powerCacheT = now ? now : 1;
   if (!pmuOk) { cachedPct = -1; cachedCharging = false; cachedUsb = true; return; }
-  cachedPct = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : -1;
+  int pct = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : -1;
+  // jeden nieudany odczyt I2C (wspolna magistrala z dotykiem) nie moze ukryc nakladki
+  if (pct < 0 && cachedPct >= 0 && !batMissed) { batMissed = true; pct = cachedPct; }
+  else if (pct >= 0) batMissed = false;
+  cachedPct = pct;
   cachedCharging = pmu.isCharging();
   cachedUsb = pmu.isVbusIn();
 }
