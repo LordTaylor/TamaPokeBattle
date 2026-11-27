@@ -21,6 +21,8 @@
 #include "pet.h"
 #include "sdmon.h"
 #include "rtcbat.h"
+#include "pvp_ui.h"
+#include "power_status.h"
 #include "i18n.h"
 #include "audio.h"
 #include "battle.h"
@@ -92,8 +94,8 @@ bool kbOpen = false;          // teclado para renombrar al bicho
 char nameBuf[12] = "";
 uint8_t nameLen = 0;
 uint8_t kbTarget = 0;  // 0 = imie stworka, 1 = nick trenera (PvP)
-#define CARD_COUNT 9
-uint8_t cardPage = 0;         // 0 perfil ... 7 expedicion, 8 pasos/trail
+#define CARD_COUNT 10
+uint8_t cardPage = 0;         // 0 perfil ... 7 expedicion, 8 pasos/trail, 9 walka PvP
 uint8_t boxPage = 0;
 uint8_t boxSort = 0;          // 0 dex, 1 tipo, 2 criados primero
 bool expeditionTrainChoiceOpen = false;
@@ -215,6 +217,7 @@ bool mainScreenReadyForShake();
 void maybeOfferMorning(uint32_t now);
 uint32_t pmdActTotalMs(const PmdAct &a);
 bool watermarkNeedsRedraw();
+bool overlayNeedsRedraw();
 void flushStampedFrame();
 void startBattleWith(int16_t forcedDex, uint8_t forcedLevel, int8_t forcedShiny = -1);
 void startBattle();
@@ -347,7 +350,7 @@ const char *screenName() {
 }
 
 bool staticScreenClean() {
-  if (watermarkNeedsRedraw()) return false;
+  if (overlayNeedsRedraw()) return false;
   if (kbOpen) return !keyboardDirty;
   if (pet.awaitingStarter()) return !starterDirty;
   if (galleryOpen && !galleryDetail) return !galleryDirty;
@@ -467,6 +470,7 @@ void maybePlayAmbientSound(uint32_t now) {
 
 uint16_t renderIntervalMs() {
   if (screenOff) return 5000;
+  if (pvpAppActive()) return pvpAppRenderIntervalMs();
   if (battleOpen) return battleResolved ? 320 : 190;
   if (gameOpen || sackOpen) return 115;
   if (galleryOpen || cardOpen || kbOpen || clockOpen || helpOpen || gameMenuOpen) return powerSave ? 650 : 320;
@@ -477,6 +481,7 @@ uint16_t renderIntervalMs() {
 }
 
 bool lightSleepAllowed(uint32_t now) {
+  if (pvpAppRadioOn()) return false;  // radio never enters light sleep
   if (!powerSave || usbPresent() || audioBusy() || Serial.available()) return false;
   if (!screenOff && dimStage == 0) return false;
   if (!screenOff && now - lastInteract < 1500UL) return false;
@@ -539,6 +544,12 @@ void loop() {
   maybeAskTrainerName();
   handleTouch();
   handleSerial();
+  pvpAppUpdate(now);
+  if (pvpAppActive()) {
+    cardDirty = true;
+    if (pvpAppKeepAwake()) lastInteract = now;
+  }
+  if (!cardOpen && pvpAppRadioOn()) pvpAppForceStop(now);  // card closed by another path
   ensureMon();
   setPowerCacheInterval(powerSave ? 10000UL : 2000UL);
   pet.ensureDailyGoals();
@@ -558,7 +569,7 @@ void loop() {
   if (walked) {
     pet.applyWalk(walked, rtcEpoch());
     trackStepEncounter(walked);
-    if (cardOpen && cardPage == 7) cardDirty = true;
+    if (cardOpen && (cardPage == 7 || cardPage == 9)) cardDirty = true;
   }
   if ((pet.stepsToday != stepsBefore || pet.stepDay != stepDayBefore) &&
       cardOpen && cardPage == 8) cardDirty = true;
@@ -597,7 +608,7 @@ void loop() {
   static uint32_t lastPwr = 0;
   if (now - lastPwr > 250) {
     lastPwr = now;
-    if (pwrShortPressed()) {
+    if (pwrShortPressed() && !pvpAppKeepAwake()) {  // PWR does not blank the screen in a PvP fight
       bool wasOff = screenOff;
       screenOff = !screenOff;
       if (!screenOff) {
@@ -618,7 +629,7 @@ void loop() {
   // y aqui no hay animacion que se corte ni dedo esperando respuesta. Con 90s
   // de inactividad la pantalla ya atenua, asi que se vuelca enseguida; el uso
   // activo persiste igual por los guardados de cada accion (comer/jugar/...).
-  if (pet.savePending() && (screenOff || dimStage >= 1 || pet.sleeping)) {
+  if (pet.savePending() && !pvpAppActive() && (screenOff || dimStage >= 1 || pet.sleeping)) {
     pet.flushSave();
   }
 
@@ -920,6 +931,7 @@ void handleSerial() {
                   pet.speciesId, pet.level(), pet.fullness, pet.joy, pet.energy,
                   pet.hygiene, pet.careMistakes, sdReady, mon.loaded,
                   batPercent(), usbPresent(), rtcEpoch());
+    Serial.printf("vbat=%d chg=%d\n", batVoltageMv(), batCharging());
     Serial.printf("peso=%u fue=%u def=%u vel=%u genes=%u/%u/%u tr=%u/%u/%u baya=%d\n",
                   pet.weight, pet.atkStat(), pet.defStat(), pet.speStat(),
                   pet.geneAtk, pet.geneDef, pet.geneSpe,
@@ -1100,6 +1112,8 @@ void onSwipeV(int dir) {
   if (gameOpen || galleryOpen || kbOpen || sackOpen || battleOpen || pet.ceremony) return;
   if (clockOpen) { clockOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); return; }
   if (cardOpen) {
+    if (pvpAppActive()) { pvpAppSwipeV(dir); return; }
+    pvpCardResetSub();
     if (dir < 0) { cardOpen = false; expeditionTrainChoiceOpen = false; markUiDirty(); lockTouchBrief(); sfxPlay(SFX_TAP); }  // arriba cierra la ficha
     return;
   }
@@ -1128,10 +1142,11 @@ void onSwipe(int dir) {
   if (gameMenuOpen) return;
   if (gameOpen || kbOpen || clockOpen || battleOpen) return;
   if (cardOpen) {  // dentro de la ficha: cambiar paginas
+    if (pvpAppActive()) { pvpAppSwipe(dir); return; }
     int p = (int)cardPage + (dir > 0 ? -1 : 1);  // izquierda avanza
     uint8_t old = cardPage;
-    cardPage = p < 0 ? 0 : (p >= CARD_COUNT ? CARD_COUNT - 1 : p);
-    if (cardPage != old) { expeditionTrainChoiceOpen = false; cardDirty = true; sfxPlay(SFX_MENU); }
+    cardPage = (uint8_t)((p + CARD_COUNT) % CARD_COUNT);  // wraps in both directions
+    if (cardPage != old) { pvpCardResetSub(); expeditionTrainChoiceOpen = false; cardDirty = true; sfxPlay(SFX_MENU); }
     return;
   }
   if (!galleryOpen) {
@@ -1248,6 +1263,7 @@ void onTap(int16_t x, int16_t y) {
   }
   if (pet.ceremony) return;  // durante la despedida no hay botones
   if (cardOpen) {
+    if (pvpAppActive()) { pvpAppTap(x, y); return; }
     if (cardPage == 0 && inProfilePetPortrait(x, y)) {
       speciesChirpPlay(pet.speciesId, true);
     }
@@ -1309,6 +1325,8 @@ void onTap(int16_t x, int16_t y) {
       startSack();
     } else if (cardPage == 7) {
       expeditionCardTap(x, y);
+    } else if (cardPage == 9 && pvpCardTap(x, y)) {
+      // handled by the PvP card page
     } else if (y >= 400) {
       cardOpen = false;
       markUiDirty();
@@ -1543,10 +1561,65 @@ static void drawWatermark(uint8_t slot) {
   }
 }
 
+// Nakladka zasilania: rysowana w flushStampedFrame, czyli na kazdym ekranie.
+static const int POWER_CHIP_W = 92;
+static const int POWER_CHIP_H = 16;
+static const int POWER_CHIP_Y = 7;  // gorny brzeg okraglego wyswietlacza: szerokosc ograniczona
+static const int POWER_ICON_W = 20;
+static const int POWER_ICON_H = 10;
+static const int POWER_LOW_PCT = 15;
+static const int POWER_OK_PCT = 40;
+static int32_t powerChipDrawnKey = -1;
+
+static PowerState currentPowerState() {
+  return powerStateOf(batPercent(), batCharging(), usbPresent());
+}
+
+static int32_t currentPowerChipKey() {
+  return powerChipKey(batPercent(), currentPowerState());
+}
+
+bool powerChipNeedsRedraw() {
+  return !screenOff && currentPowerChipKey() != powerChipDrawnKey;
+}
+
+bool overlayNeedsRedraw() {
+  return watermarkNeedsRedraw() || powerChipNeedsRedraw();
+}
+
+static void drawPowerChip() {
+  powerChipDrawnKey = currentPowerChipKey();
+  PowerState state = currentPowerState();
+  if (state == POWER_NO_BATTERY) return;
+  int pc = constrain(batPercent(), 0, 100);
+  uint16_t col = state != POWER_BATTERY ? UI_BAR_OK
+                 : (pc >= POWER_OK_PCT) ? UI_INK
+                 : (pc >= POWER_LOW_PCT) ? UI_BAR_WARN
+                                         : UI_BAR_BAD;
+  StrId labelId = state == POWER_CHARGING ? S_PWR_CHG
+                  : state == POWER_USB ? S_PWR_USB
+                                       : S_PWR_BAT;
+  int x = CX - POWER_CHIP_W / 2, y = POWER_CHIP_Y;
+  gfx->fillRoundRect(x, y, POWER_CHIP_W, POWER_CHIP_H, 8, UI_WHITE);
+  gfx->drawRoundRect(x, y, POWER_CHIP_W, POWER_CHIP_H, 8, col);
+  int ix = x + 6, iy = y + (POWER_CHIP_H - POWER_ICON_H) / 2;
+  gfx->drawRoundRect(ix, iy, POWER_ICON_W, POWER_ICON_H, 2, UI_INK);
+  gfx->fillRect(ix + POWER_ICON_W, iy + 3, 2, POWER_ICON_H - 6, UI_INK);  // borne
+  int fw = (POWER_ICON_W - 4) * pc / 100;
+  if (fw > 0) gfx->fillRect(ix + 2, iy + 2, fw, POWER_ICON_H - 4, col);
+  char label[16];
+  snprintf(label, sizeof(label), "%d%% %s", pc, T(labelId));
+  gfx->setTextColor(UI_INK);
+  gfx->setTextSize(1);
+  gfx->setCursor(ix + POWER_ICON_W + 8, y + 4);
+  gfx->print(label);
+}
+
 void flushStampedFrame() {
   uint8_t slot = watermarkSlot();
   drawWatermark(slot);
   watermarkDrawnSlot = (int8_t)slot;
+  drawPowerChip();
   gfx->flush();
 }
 
@@ -1708,7 +1781,7 @@ void renderStarterSelect() {
 }
 
 void render() {
-  if (watermarkNeedsRedraw()) {
+  if (overlayNeedsRedraw()) {
     starterDirty = true;
     cardDirty = true;
     clockDirty = true;
@@ -4971,6 +5044,7 @@ void expeditionCardTap(int16_t x, int16_t y) {
 }
 
 void renderCard() {
+  if (pvpAppActive()) { renderPvpApp(); return; }
   cardDirty = false;
   gfx->fillScreen(UI_BG_DAY);
   if (cardPage == 0) renderCardProfile();
@@ -4981,7 +5055,8 @@ void renderCard() {
   else if (cardPage == 5) renderCardMedals();
   else if (cardPage == 6) renderCardProgress();
   else if (cardPage == 7) renderCardExpedition();
-  else renderCardSteps();
+  else if (cardPage == 8) renderCardSteps();
+  else renderCardPvp();
 
   // indicador de paginas + ayuda
   int dotsX = CX - ((CARD_COUNT - 1) * 24) / 2;
@@ -5277,9 +5352,13 @@ void renderGallery() {
   int pages = galleryPageCount();
   int dotX = CX - (pages - 1) * 7;
   for (int i = 0; i < pages; i++) {
-    if (i == galleryPage) gfx->fillCircle(dotX + i * 14, 436, 4, UI_INK);
-    else gfx->drawCircle(dotX + i * 14, 436, 3, UI_INK);
+    if (i == galleryPage) gfx->fillCircle(dotX + i * 14, 420, 4, UI_INK);
+    else gfx->drawCircle(dotX + i * 14, 420, 3, UI_INK);
   }
+  gfx->setTextColor(UI_TRACK);  // visible exit: tap the label (galleryTap bottom zone)
+  gfx->setTextSize(2);
+  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 436);
+  gfx->print(T(S_BACK));
   flushStampedFrame();
 }
 
@@ -5291,7 +5370,7 @@ void galleryTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     return;
   }
-  if (y < 46) {  // tocar la cabecera = salir
+  if (y < 46 || (y >= 426 && x >= CX - 70 && x <= CX + 70)) {  // header or the bottom BACK label = exit
     galleryOpen = false;
     galleryPmd.unload();
     sfxPlay(SFX_TAP);
@@ -5321,31 +5400,7 @@ void galleryTap(int16_t x, int16_t y) {
   if (pet.isRegistered(dex) || pet.isCaught(dex)) speciesChirpPlay(dex);
 }
 
-void drawBattery() {
-  int pc = batPercent();
-  if (pc < 0) return;  // sin bateria conectada
-  int x = CX - 14, y = 12, w = 24, h = 11;
-  bool charging = batCharging();
-  uint16_t col = charging ? UI_BAR_OK
-                 : (pc >= 40) ? inkColor()
-                 : (pc >= 15) ? UI_BAR_WARN
-                              : UI_BAR_BAD;
-  gfx->drawRoundRect(x, y, w, h, 2, col);
-  gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
-  if (charging) {
-    // rayo de carga (zigzag) en vez de la barra de nivel
-    uint16_t bolt = C565(0xff, 0xd9, 0x4a);
-    int bx = x + w / 2;
-    gfx->fillTriangle(bx + 3, y + 1, bx - 4, y + 6, bx + 1, y + 6, bolt);
-    gfx->fillTriangle(bx - 1, y + 5, bx + 4, y + 5, bx - 3, y + 10, bolt);
-  } else {
-    int fw = (w - 4) * pc / 100;
-    if (fw > 0) gfx->fillRect(x + 2, y + 2, fw, h - 4, col);
-  }
-}
-
 void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
-  drawBattery();
   gfx->setTextColor(nameColor);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(name) * 9, 52);

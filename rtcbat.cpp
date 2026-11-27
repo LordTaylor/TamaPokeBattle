@@ -1,5 +1,6 @@
 #include "rtcbat.h"
 #include "pin_config.h"  // define XPOWERS_CHIP_AXP2101
+#include "power_status.h"
 #include <Wire.h>
 #include <time.h>
 #include <SensorPCF85063.hpp>
@@ -57,7 +58,11 @@ void rtcSetEpoch(uint32_t e) {
 bool batBegin() {
   pmuOk = pmu.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL);
   if (!pmuOk) Serial.println("AXP2101 no detectado");
-  else configureBatteryCharger();
+  else {
+    pmu.enableBattDetection();
+    pmu.enableBattVoltageMeasure();
+    configureBatteryCharger();
+  }
   return pmuOk;
 }
 
@@ -80,15 +85,25 @@ static uint32_t powerCacheT = 0;
 static uint32_t powerCacheMs = 2000;
 static int cachedPct = -1;
 static bool cachedCharging = false, cachedUsb = true;
+static bool batMissed = false;
 
 static void refreshPower() {
   uint32_t now = millis();
   if (powerCacheT && now - powerCacheT < powerCacheMs) return;
   powerCacheT = now ? now : 1;
   if (!pmuOk) { cachedPct = -1; cachedCharging = false; cachedUsb = true; return; }
-  cachedPct = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : -1;
+  int pct = pmu.isBatteryConnect() ? resolveBatteryPercent(pmu.getBatteryPercent(), pmu.getBattVoltage()) : -1;
+  // jeden nieudany odczyt I2C (wspolna magistrala z dotykiem) nie moze ukryc nakladki
+  if (pct < 0 && cachedPct >= 0 && !batMissed) { batMissed = true; pct = cachedPct; }
+  else if (pct >= 0) batMissed = false;
+  cachedPct = pct;
   cachedCharging = pmu.isCharging();
   cachedUsb = pmu.isVbusIn();
+}
+
+int batVoltageMv() {
+  if (!pmuOk || !pmu.isBatteryConnect()) return -1;
+  return pmu.getBattVoltage();
 }
 
 int batPercent() { refreshPower(); return cachedPct; }

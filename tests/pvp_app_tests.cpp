@@ -271,7 +271,20 @@ static void testPumpHandlesAtMostEightPacketsPerUpdate() {
   EXPECT_EQ((int)r.a.link.inbox.size(), 20 - (int)PVP_PUMP_MAX_RX);
 }
 
+static void testDisabledBattleGateEndsBeforeAnyLedgerCall() {
+  AppRig r;
+  r.a.app.setBattleEnabled(false);
+  r.b.app.setBattleEnabled(false);
+  openBoth(r);
+  EXPECT_TRUE(r.runUntil(30000, bothIdle));
+  EXPECT_EQ(r.a.host.begins + r.b.host.begins, 0);
+  EXPECT_EQ(r.a.host.quits + r.b.host.quits, 0);
+  EXPECT_EQ(r.a.host.ends + r.b.host.ends, 0);
+  EXPECT_EQ((int)(r.a.host.matches.size() + r.b.host.matches.size()), 0);
+}
+
 int main() {
+  testDisabledBattleGateEndsBeforeAnyLedgerCall();
   testFullMatchLossless();
   testFullMatchWithLossAndDuplication();
   testQuitSendsAbortThriceBeforePenalty();

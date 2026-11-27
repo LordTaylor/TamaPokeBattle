@@ -36,6 +36,8 @@ class PvpApp : private PvpEventSink {
   bool quit(uint32_t nowMs);   // confirmed escape from a battle (penalty)
   bool leave(uint32_t nowMs);  // cancel / OK: back to the card page via STOPPING
   void touch(uint32_t nowMs) { lastInteract_ = nowMs; }
+  // Staging gate (default PVP_BATTLE_ENABLED): when off, BATTLE_START ends the session cleanly.
+  void setBattleEnabled(bool enabled) { battleEnabled_ = enabled; }
   // Safety net when the card is closed by another path: abort (+ quit penalty in battle), radio off.
   void forceStop(uint32_t nowMs);
 
@@ -81,6 +83,7 @@ class PvpApp : private PvpEventSink {
   bool localQuit_ = false;
   bool rejected_ = false;
   bool battleOpen_ = false;
+  bool battleEnabled_ = PVP_BATTLE_ENABLED;
   bool roundLocked_ = false;
   uint32_t lastInteract_ = 0;
   uint32_t roundConfirmedMs_ = 0;
